@@ -1,0 +1,13 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+bindir=@INSTALL_BIN_DIR@
+libdir=@INSTALL_LIB_DIR@
+includedir=@INSTALL_INC_DIR@
+
+Name: itspkilib
+Description: itspki enrollment library
+Version: @VERSION@
+
+Requires:
+Libs: -L${libdir}  -l@PROJECT_NAME@
+Cflags: -I${includedir}
+
