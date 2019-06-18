@@ -8,7 +8,7 @@ pkg_check_modules(YAML_CPP REQUIRED yaml-cpp)
 pkg_check_modules(LIBETSITS102941 REQUIRED libEtsiTs102941)
 
 add_executable( unit_tests
-    its_enrollment_tests.cpp
+    itspki-tests.cpp
     pki-its-report.cpp
     pki-its-test.cpp
     utils-curl.cpp
@@ -26,8 +26,8 @@ target_compile_options(unit_tests PUBLIC ${OPENSSL_LIBCRYPTO_CFLAGS_OTHER})
 target_link_libraries(
     unit_tests
     gtest_main
-    #    test_itsenrollment
-    libitsenrollment_static
+    #    test_itspki
+    libitspki_static
     -lboost_program_options
     -lxml2 -lpthread -lrt -lncurses
     -lcurl
@@ -44,7 +44,7 @@ target_compile_definitions(unit_tests PUBLIC ITSPKI_CONFIG_FILE="${PROJECT_BINAR
 
 add_test(
   NAME
-    unit_itsenrollment
+    unit_itspki
   COMMAND
     ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/unit_tests
   )

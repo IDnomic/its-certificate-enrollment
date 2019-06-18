@@ -3,6 +3,11 @@
 
 add_definitions(-DPLATFORM=LINUX -DLINUX)
 
+macro(install_symlink filepath sympath)
+	install(CODE "execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink ${filepath} ${sympath})")
+	install(CODE "message(\"-- Created symlink: ${sympath} -> ${filepath}\")")
+endmacro(install_symlink)
+
 find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(OPENSSL_LIBCRYPTO REQUIRED libcrypto)
@@ -14,36 +19,43 @@ pkg_check_modules(LIBETSITS102941 REQUIRED EtsiTs102941)
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -DITS_PKI_DEBUG")
 message("CMAKE_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG}")
 
-set(LIBITSENROLLMENT_SRC library/pki-its-cmd-args.cpp library/pki-its-debug.cpp library/pki-its-etsi.cpp library/pki-its-internal-data.cpp library/pki-its-work.cpp library/utils.cpp library/utils-openssl.cpp library/utils-ttcn.cpp)
+set(LIBITSPKI_SRC library/pki-its-cmd-args.cpp library/pki-its-debug.cpp library/pki-its-etsi.cpp library/pki-its-internal-data.cpp library/pki-its-work.cpp library/utils.cpp library/utils-openssl.cpp library/utils-ttcn.cpp)
 
 include_directories(./include ${PROJECT_BINARY_DIR} ${OPENSSL_LIBCRYPTO_INCLUDE_DIRS} ${TTCN3_INCLUDE_DIRS} ${YAML_CPP_INCLUDE_DIRS} ${LIBETSITS102941_INCLUDE_DIRS})
 
-add_library(libitsenrollment_dynamic SHARED ${LIBITSENROLLMENT_SRC})
-add_library(libitsenrollment_static STATIC  ${LIBITSENROLLMENT_SRC})
+add_library(libitspki_dynamic SHARED ${LIBITSPKI_SRC})
+add_library(libitspki_static STATIC  ${LIBITSPKI_SRC})
 
-set_target_properties(libitsenrollment_dynamic PROPERTIES OUTPUT_NAME "itsenrollment")
-set_target_properties(libitsenrollment_dynamic PROPERTIES VERSION 1.2 SOVERSION 1)
+set_target_properties(libitspki_dynamic PROPERTIES OUTPUT_NAME "itspki")
+set_target_properties(libitspki_dynamic PROPERTIES VERSION 1.2 SOVERSION 1)
 
 # target_link_libraries(testapp ${SDL2_LIBRARIES})
-target_include_directories(libitsenrollment_dynamic PUBLIC ${OPENSSL_LIBCRYPTO_INCLUDE_DIRS})
-target_compile_options(libitsenrollment_dynamic PUBLIC ${OPENSSL_LIBCRYPTO_CFLAGS_OTHER})
+target_include_directories(libitspki_dynamic PUBLIC ${OPENSSL_LIBCRYPTO_INCLUDE_DIRS})
+target_compile_options(libitspki_dynamic PUBLIC ${OPENSSL_LIBCRYPTO_CFLAGS_OTHER})
 
-set_target_properties(libitsenrollment_static PROPERTIES OUTPUT_NAME "itsenrollment")
+set_target_properties(libitspki_static PROPERTIES OUTPUT_NAME "itspki")
 
-set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
+# set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
 
-install(TARGETS libitsenrollment_dynamic libitsenrollment_static
+configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.pc.cmakein ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.pc @ONLY)
+
+install(TARGETS libitspki_dynamic libitspki_static
         LIBRARY DESTINATION lib
 	PUBLIC_HEADER DESTINATION include/its
         ARCHIVE DESTINATION lib)
 
-install(DIRECTORY include/its/
-	DESTINATION include/its/)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/itspkilib.pc DESTINATION "${INSTALL_PKGCONFIG_DIR}")
+
+install_symlink("${INSTALL_PKGCONFIG_DIR}/${PROJECT_NAME}.pc" "/usr/local/lib/pkgconfig/${PROJECT_NAME}.pc")
+
+install(DIRECTORY include/its/ DESTINATION include/its/)
+
+message ("CMAKE_INSTALL_PREFIX ${CMAKE_INSTALL_PREFIX}, CMAKE_INSTALL_LIBDIR ${CMAKE_INSTALL_LIBDIR}")
 
 # library that holds sources to test
-add_library(test_itsenrollment "")
+add_library(test_itspki "")
 target_sources(
-    test_itsenrollment
+    test_itspki
     PRIVATE
 	library/pki-its-cmd-args.cpp
 	library/pki-its-debug.cpp
@@ -66,7 +78,7 @@ target_sources(
     )
 
 target_include_directories(
-    test_itsenrollment
+    test_itspki
     PUBLIC
         ${CMAKE_CURRENT_LIST_DIR}/include/its
     )
