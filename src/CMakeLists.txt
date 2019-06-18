@@ -8,7 +8,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(OPENSSL_LIBCRYPTO REQUIRED libcrypto)
 pkg_check_modules(TTCN3 REQUIRED ttcn3-nomain)
 pkg_check_modules(YAML_CPP REQUIRED yaml-cpp)
-pkg_check_modules(LIBETSITS102941 REQUIRED libEtsiTs102941)
+pkg_check_modules(LIBETSITS102941 REQUIRED EtsiTs102941)
 # message("Libs: ${OPENSSL_LIBCRYPTO_LIBRARIES}, ${TTCN3_LIBRARIES}, ${YAML_CPP_LIBRARIES}")
 
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -DITS_PKI_DEBUG")
