@@ -5,7 +5,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(OPENSSL_LIBCRYPTO REQUIRED libcrypto)
 pkg_check_modules(TTCN3 REQUIRED ttcn3-nomain)
 pkg_check_modules(YAML_CPP REQUIRED yaml-cpp)
-pkg_check_modules(LIBETSITS102941 REQUIRED libEtsiTs102941)
+pkg_check_modules(ETSITS102941 REQUIRED EtsiTs102941)
 
 add_executable( unit_tests
     itspki-tests.cpp
@@ -26,15 +26,14 @@ target_compile_options(unit_tests PUBLIC ${OPENSSL_LIBCRYPTO_CFLAGS_OTHER})
 target_link_libraries(
     unit_tests
     gtest_main
-    #    test_itspki
     libitspki_static
     -lboost_program_options
     -lxml2 -lpthread -lrt -lncurses
     -lcurl
     -lcrypto
-    -L/home/vtarasov/projects/idnomic/innovation/its-pki-lib/yaml-cpp/install/lib -lyaml-cpp -lstdc++fs
-    -L/home/vtarasov/projects/idnomic/innovation/its-pki-lib/gerrithub.titan.core.work/Install/lib  -lttcn3-nomain
-    -L/home/vtarasov/projects/idnomic/innovation/its-pki-lib/gerrithub.titan.core/function_test/OER_EncDec/PKI_TS102941 -lEtsiTs102941
+    ${YAML_CPP_LDFLAGS}
+    ${TTCN3_LDFLAGS}
+    ${ETSITS102941_LDFLAGS}
 )
 
 target_compile_options( unit_tests PRIVATE -lboost_program_options -lcurl ${TTCN3__LDFLAGS} ${TTCN3__LDFLAGS_OTHER}  )
