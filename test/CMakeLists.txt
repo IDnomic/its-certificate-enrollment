@@ -31,15 +31,14 @@ target_link_libraries(
     -lxml2 -lpthread -lrt -lncurses
     -lcurl
     -lcrypto
-    ${YAML_CPP_LDFLAGS}
-    ${TTCN3_LDFLAGS}
-    ${ETSITS102941_LDFLAGS}
+    #    ${YAML_CPP_LDFLAGS}
+    #    ${TTCN3_LDFLAGS}
+    #    ${ETSITS102941_LDFLAGS}
 )
 
-target_compile_options( unit_tests PRIVATE -lboost_program_options -lcurl ${TTCN3__LDFLAGS} ${TTCN3__LDFLAGS_OTHER}  )
-
-target_compile_definitions(unit_tests PUBLIC ITSPKI_CONFIG_FILE="${PROJECT_BINARY_DIR}/config.h")
-# target_compile_definitions(unit_tests PUBLIC ASN1_OER_ENCODE_C=1)
+target_compile_options( unit_tests PRIVATE ${TTCN3_CFLAGS} ${ETSITS102941_CFLAGS} ${YAML_CPP_CFLAGS} ${OPENSSL_LIBCRYPTO_CFLAGS} )
+target_compile_definitions( unit_tests PUBLIC ITSPKI_CONFIG_FILE="${PROJECT_BINARY_DIR}/config.h")
+target_link_libraries( unit_tests ${YAML_CPP_LDFLAGS} ${TTCN3_LDFLAGS} ${ETSITS102941_LDFLAGS} )
 
 add_test(
   NAME
