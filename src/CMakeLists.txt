@@ -33,7 +33,7 @@ set_target_properties(libitspki_dynamic PROPERTIES VERSION 1.2 SOVERSION 1)
 target_include_directories(libitspki_dynamic PUBLIC ${OPENSSL_LIBCRYPTO_INCLUDE_DIRS})
 target_compile_options(libitspki_dynamic PUBLIC ${OPENSSL_LIBCRYPTO_CFLAGS_OTHER})
 
-set_target_properties(libitspki_static PROPERTIES OUTPUT_NAME "libitspki")
+set_target_properties(libitspki_static PROPERTIES OUTPUT_NAME "itspki")
 
 # set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
 
