@@ -3,11 +3,11 @@ bindir=@INSTALL_BIN_DIR@
 libdir=@INSTALL_LIB_DIR@
 includedir=@INSTALL_INC_DIR@
 
-Name: itspkilib
+Name: @PROJECT_NAME@
 Description: itspki enrollment library
 Version: @VERSION@
 
 Requires:
-Libs: -L${libdir}  -l@PROJECT_NAME@
+Libs: -L${libdir}  -litspki
 Cflags: -I${includedir}
 

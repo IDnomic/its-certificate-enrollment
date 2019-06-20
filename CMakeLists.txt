@@ -1,7 +1,7 @@
 # stop if cmake version below 3.5
 cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 
-project(itspkilib C CXX)
+project(libitspki C CXX)
 
 # guard against in-source builds and bad build-type strings
 include(cmake/safeguards.cmake)

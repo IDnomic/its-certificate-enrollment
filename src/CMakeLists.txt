@@ -13,7 +13,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(OPENSSL_LIBCRYPTO REQUIRED libcrypto)
 pkg_check_modules(TTCN3 REQUIRED ttcn3-nomain)
 pkg_check_modules(YAML_CPP REQUIRED yaml-cpp)
-pkg_check_modules(LIBETSITS102941 REQUIRED EtsiTs102941)
+pkg_check_modules(ETSITS102941 REQUIRED EtsiTs102941)
 # message("Libs: ${OPENSSL_LIBCRYPTO_LIBRARIES}, ${TTCN3_LIBRARIES}, ${YAML_CPP_LIBRARIES}")
 
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -DITS_PKI_DEBUG")
@@ -21,7 +21,7 @@ message("CMAKE_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG}")
 
 set(LIBITSPKI_SRC library/pki-its-cmd-args.cpp library/pki-its-debug.cpp library/pki-its-etsi.cpp library/pki-its-internal-data.cpp library/pki-its-work.cpp library/utils.cpp library/utils-openssl.cpp library/utils-ttcn.cpp)
 
-include_directories(./include ${PROJECT_BINARY_DIR} ${OPENSSL_LIBCRYPTO_INCLUDE_DIRS} ${TTCN3_INCLUDE_DIRS} ${YAML_CPP_INCLUDE_DIRS} ${LIBETSITS102941_INCLUDE_DIRS})
+include_directories(./include ${PROJECT_BINARY_DIR} ${OPENSSL_LIBCRYPTO_INCLUDE_DIRS} ${TTCN3_INCLUDE_DIRS} ${YAML_CPP_INCLUDE_DIRS} ${ETSITS102941_INCLUDE_DIRS})
 
 add_library(libitspki_dynamic SHARED ${LIBITSPKI_SRC})
 add_library(libitspki_static STATIC  ${LIBITSPKI_SRC})
@@ -33,7 +33,7 @@ set_target_properties(libitspki_dynamic PROPERTIES VERSION 1.2 SOVERSION 1)
 target_include_directories(libitspki_dynamic PUBLIC ${OPENSSL_LIBCRYPTO_INCLUDE_DIRS})
 target_compile_options(libitspki_dynamic PUBLIC ${OPENSSL_LIBCRYPTO_CFLAGS_OTHER})
 
-set_target_properties(libitspki_static PROPERTIES OUTPUT_NAME "itspki")
+set_target_properties(libitspki_static PROPERTIES OUTPUT_NAME "libitspki")
 
 # set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
 
@@ -44,7 +44,7 @@ install(TARGETS libitspki_dynamic libitspki_static
 	PUBLIC_HEADER DESTINATION include/its
         ARCHIVE DESTINATION lib)
 
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/itspkilib.pc DESTINATION "${INSTALL_PKGCONFIG_DIR}")
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libitspki.pc DESTINATION "${INSTALL_PKGCONFIG_DIR}")
 
 install_symlink("${INSTALL_PKGCONFIG_DIR}/${PROJECT_NAME}.pc" "/usr/local/lib/pkgconfig/${PROJECT_NAME}.pc")
 
