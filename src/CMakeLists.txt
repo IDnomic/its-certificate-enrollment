@@ -16,7 +16,7 @@ pkg_check_modules(YAML_CPP REQUIRED yaml-cpp)
 pkg_check_modules(ETSITS102941 REQUIRED EtsiTs102941)
 # message("Libs: ${OPENSSL_LIBCRYPTO_LIBRARIES}, ${TTCN3_LIBRARIES}, ${YAML_CPP_LIBRARIES}")
 
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -DITS_PKI_DEBUG")
+set(CMAKE_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG} -DITS_PKI_DEBUG)
 message("CMAKE_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG}")
 
 set(LIBITSPKI_SRC library/pki-its-debug.cpp library/pki-its-etsi.cpp library/pki-its-internal-data.cpp library/pki-its-work.cpp library/utils.cpp library/utils-openssl.cpp library/utils-ttcn.cpp)
@@ -25,21 +25,29 @@ include_directories(./include ${PROJECT_BINARY_DIR} ${OPENSSL_LIBCRYPTO_INCLUDE_
 
 add_library(libitspki_dynamic SHARED ${LIBITSPKI_SRC})
 add_library(libitspki_static STATIC  ${LIBITSPKI_SRC})
+add_library(libitspki_debug_dynamic SHARED ${LIBITSPKI_SRC})
+add_library(libitspki_debug_static STATIC  ${LIBITSPKI_SRC})
 
 set_target_properties(libitspki_dynamic PROPERTIES OUTPUT_NAME "itspki")
 set_target_properties(libitspki_dynamic PROPERTIES VERSION 1.2 SOVERSION 1)
+set_target_properties(libitspki_debug_dynamic PROPERTIES OUTPUT_NAME "itspki-debug")
+set_target_properties(libitspki_debug_dynamic PROPERTIES VERSION 1.2 SOVERSION 1)
 
 # target_link_libraries(testapp ${SDL2_LIBRARIES})
 target_include_directories(libitspki_dynamic PUBLIC ${OPENSSL_LIBCRYPTO_INCLUDE_DIRS})
 target_compile_options(libitspki_dynamic PUBLIC ${OPENSSL_LIBCRYPTO_CFLAGS_OTHER})
+target_include_directories(libitspki_debug_dynamic PUBLIC ${OPENSSL_LIBCRYPTO_INCLUDE_DIRS})
+target_compile_options(libitspki_debug_dynamic PUBLIC ${OPENSSL_LIBCRYPTO_CFLAGS_OTHER} -DITS_PKI_DEBUG)
 
 set_target_properties(libitspki_static PROPERTIES OUTPUT_NAME "itspki")
+set_target_properties(libitspki_debug_static PROPERTIES OUTPUT_NAME "itspki-debug")
+target_compile_options(libitspki_debug_static PUBLIC ${OPENSSL_LIBCRYPTO_CFLAGS_OTHER} -DITS_PKI_DEBUG)
 
 # set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
 
 configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.pc.cmakein ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.pc @ONLY)
 
-install(TARGETS libitspki_dynamic libitspki_static
+install(TARGETS libitspki_dynamic libitspki_static  libitspki_debug_dynamic libitspki_debug_static 
         LIBRARY DESTINATION lib
 	PUBLIC_HEADER DESTINATION include/its
         ARCHIVE DESTINATION lib)
