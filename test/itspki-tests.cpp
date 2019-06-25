@@ -1,5 +1,5 @@
 #include "gtest/gtest.h"
-#include "its/pki-its-cmd-args.hh"
+#include "pki-its-cmd-args.hh"
 #include "its/pki-its-internal-data.hh"
 #include "its/pki-its-work.hh"
 
@@ -11,6 +11,9 @@ const char *aa_cert = "gAMAgEJI3Vtd8DQ7GYEPVVRPUElBX1RFU1RfQUExAAAAAAAcaAP1hgAFA
 const char *canonical_id = "TEST-DEMO-51AC321296526271";
 long app_perms_psid = 623;
 const char *ssp_bitmap = "01C0";
+
+bool ParseEcEnrollmentCmdArguments(ItsPkiCmdArguments cmd_args, ItsPkiInternalData &idata);
+
 
 TEST(itspki_encode, add)
 {
@@ -26,11 +29,11 @@ TEST(itspki_encode, add)
 	cmd_args.app_perms_psid  = app_perms_psid; 
 	cmd_args.app_perms_ssp_bitmap = std::string(ssp_bitmap); 
 
-	ItsPkiInternalData idata(CMD_TYPE_EC_CREATE_ENROLL_REQUEST, cmd_args);
-	ASSERT_TRUE(idata.IsValid());
+	ItsPkiInternalData idata;
+	ASSERT_TRUE(ParseEcEnrollmentCmdArguments(cmd_args, idata));
+        ASSERT_TRUE(idata.CheckEcEnrollmentArguments());
 
 	ItsPkiWork work(idata);
         OCTETSTRING data_encrypted;
 	ASSERT_TRUE(work.EcEnrollmentRequest_Create(idata, data_encrypted));
-
 }

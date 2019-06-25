@@ -19,7 +19,7 @@ pkg_check_modules(ETSITS102941 REQUIRED EtsiTs102941)
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -DITS_PKI_DEBUG")
 message("CMAKE_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG}")
 
-set(LIBITSPKI_SRC library/pki-its-cmd-args.cpp library/pki-its-debug.cpp library/pki-its-etsi.cpp library/pki-its-internal-data.cpp library/pki-its-work.cpp library/utils.cpp library/utils-openssl.cpp library/utils-ttcn.cpp)
+set(LIBITSPKI_SRC library/pki-its-debug.cpp library/pki-its-etsi.cpp library/pki-its-internal-data.cpp library/pki-its-work.cpp library/utils.cpp library/utils-openssl.cpp library/utils-ttcn.cpp)
 
 include_directories(./include ${PROJECT_BINARY_DIR} ${OPENSSL_LIBCRYPTO_INCLUDE_DIRS} ${TTCN3_INCLUDE_DIRS} ${YAML_CPP_INCLUDE_DIRS} ${ETSITS102941_INCLUDE_DIRS})
 
@@ -57,7 +57,6 @@ add_library(test_itspki "")
 target_sources(
     test_itspki
     PRIVATE
-	library/pki-its-cmd-args.cpp
 	library/pki-its-debug.cpp
 	library/pki-its-etsi.cpp
 	library/pki-its-internal-data.cpp
@@ -67,7 +66,6 @@ target_sources(
 	library/utils-ttcn.cpp
     PUBLIC
     	${CMAKE_CURRENT_LIST_DIR}/include/its/its-asn1-modules.hh
-	${CMAKE_CURRENT_LIST_DIR}/include/its/pki-its-cmd-args.hh
 	${CMAKE_CURRENT_LIST_DIR}/include/its/pki-its-debug.hh
 	${CMAKE_CURRENT_LIST_DIR}/include/its/pki-its-etsi.hh
 	${CMAKE_CURRENT_LIST_DIR}/include/its/pki-its-internal-data.hh

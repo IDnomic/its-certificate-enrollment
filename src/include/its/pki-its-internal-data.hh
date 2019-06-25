@@ -11,10 +11,8 @@
 #include "TTCN3.hh"
 #include "EtsiTs103097Module.hh"
 
-#include "its-asn1-modules.hh"
-
-#include "pki-its-cmd-args.hh"
-#include "pki-its-internal-data.hh"
+#include "its/its-asn1-modules.hh"
+#include "its/pki-its-internal-data.hh"
 
 #include <IEEE1609dot2BaseTypes.hh>
 
@@ -40,7 +38,6 @@ public:
 private:
 	std::string CLASS_NAME = std::string("ItsPkiInternalData");
 	bool valid = false;
-	std::string last_error_str;
 
 	unsigned char its_id[8];
 	std::string log_line_header;
@@ -50,11 +47,13 @@ private:
 	std::string profile;
 	
 	struct PsidSsp psid_ssp;
-	IEEE1609dot2BaseTypes::HashAlgorithm::enum_type hash_algorithm;
+	IEEE1609dot2BaseTypes::HashAlgorithm::enum_type hash_algorithm = IEEE1609dot2BaseTypes::HashAlgorithm::sha256;
 	
 	unsigned char *validityrestrictions = NULL;
 	int validityrestrictions_len;
 	
+    	void *technicalKey = NULL;
+
 	OCTETSTRING itsEcCert_blob;
 	OCTETSTRING itsEcId;
 	void *itsEcVerificationKey = NULL;
@@ -96,69 +95,160 @@ private:
 	void *aaVerificationKey = NULL;
 
 	void init();
-	bool ParseEcEnrollmentCmdArguments(ItsPkiCmdArguments &);
-	bool ParseCmdArguments(ItsPkiCmdArguments &);
-	bool CreateCanonicalID(ItsPkiCmdArguments &);
-	bool BuildAidSsp(ItsPkiCmdArguments &);
+
 	bool setEncryptionKey(OCTETSTRING &, void **);
-	bool setEAEncryptionKey(OCTETSTRING &);
-	bool readEACertificateFile(std::string &);
-	bool readEACertificateB64(std::string &);
-	bool setAAEncryptionKey(OCTETSTRING &);
-	bool readAACertificateFile(std::string &);
-	bool readAACertificateB64(std::string &);
-	bool readItsEcCertificateFile(std::string &);
-	bool readItsEcCertificateB64(std::string &);
-	bool setItsEcId(OCTETSTRING &);
+	bool getCertId(OCTETSTRING &, OCTETSTRING &);
+	bool GetPublicVerificationKey(void *, IEEE1609dot2BaseTypes::PublicVerificationKey &);
+	bool GetPublicEncryptionKey(void *, IEEE1609dot2BaseTypes::PublicEncryptionKey &);
+
+	bool CheckEnrollmentDataEA();
+	bool CheckEnrollmentDataAA();
+	bool CheckEnrollmentDataItsEc();
 public:
-	ItsPkiInternalData(ItsPkiCmdArguments &);
-	ItsPkiInternalData(type_cmd_operation_t cmd, ItsPkiCmdArguments &);
-		
-	ItsPkiInternalData() = delete;
+	ItsPkiInternalData();
 	~ItsPkiInternalData();
 	const char *GetClassName() {return CLASS_NAME.c_str();};
-
-	bool IsValid() { return valid; };	
-	bool GetItsRegisterRequest(std::string &);
-	std::string GetLastErrorStr() { return last_error_str; };
+	
+	bool SetCanonicalID(const std::string &, const std::string &);
 	std::string GetCanonicalId() { return its_canonical_id; };
+	
+	bool SetAidSsp(const long, const std::string &, const std::string &);
 	struct PsidSsp &GetAppPermsSsp() { return psid_ssp; };
+	bool CheckAidSsp();
+	
+	bool SetHashAlgorithm(IEEE1609dot2BaseTypes::HashAlgorithm::enum_type algo) {
+		hash_algorithm = algo;
+		return true;
+	};
 	IEEE1609dot2BaseTypes::HashAlgorithm::enum_type &GetHashAlgorithm() { return hash_algorithm; };
+
+	bool SetItsTechnicalKey(void *key) {
+		technicalKey = key; 
+		return technicalKey == NULL ? false : true;
+	};
+	void *GetItsTechnicalKey() {
+		return technicalKey;
+	};
+
+	bool SetItsEcVerificationKey(void *key) {
+		itsEcVerificationKey = key;
+		return ((key == NULL) ? false : true);
+	};
+	void *GetItsEcVerificationKey() {
+		return itsEcVerificationKey;
+	};
+	
+	bool SetItsEcEncryptionKey(void *key) {
+		itsEcEncryptionKey = key;
+		itsEcEncryptionKeyEnable = ((key == NULL) ? false : true);
+		return itsEcEncryptionKeyEnable;
+	};
+	void *GetItsEcEncryptionKey() {
+		return (itsEcEncryptionKeyEnable ? itsEcEncryptionKey : NULL);
+	};
+
+	bool SetEAEncryptionKey(OCTETSTRING &);
+
+	bool SetItsEcCertSave2File(std::string file_name) {
+		itsEcCertSave2File = file_name;
+       		return true;
+	};
+	std::string &GetItsEcCertSave2File() {
+		return itsEcCertSave2File;
+	};
+
+	bool SetItsEcVerificationKeySave2File(std::string file_name) {
+		itsEcVerificationKeySave2File = file_name;
+       		return true;
+	};
+	std::string &GetItsEcVerificationKeySave2File() {
+		return itsEcVerificationKeySave2File;
+	};
+	
+	bool SetItsEcEncryptionKeySave2File(std::string file_name) {
+		itsEcEncryptionKeySave2File = file_name;
+       		return true;
+	};
+	std::string &GetItsEcEncryptionKeySave2File() {
+		return itsEcEncryptionKeySave2File;
+	};
+
+	bool CheckEcEnrollmentArguments();
+
+	bool SetItsAtVerificationKey(void *key) {
+		itsAtVerificationKey = key;
+		return ((key == NULL) ? false : true);
+	};
+	void *GetItsAtVerificationKey() {
+		return itsAtVerificationKey;
+	};
+	
+	bool SetItsAtEncryptionKey(void *key) {
+		itsAtEncryptionKey = key;
+		itsAtEncryptionKeyEnable = ((key == NULL) ? false : true);
+		return itsAtEncryptionKeyEnable;
+	};
+	void *GetItsAtEncryptionKey() {
+		return (itsAtEncryptionKeyEnable ? itsAtEncryptionKey : NULL);
+	};
+
+	bool SetAAEncryptionKey(OCTETSTRING &);
+
+	bool SetItsEcId(OCTETSTRING &);
+
+	bool SetItsAtCertSave2File(std::string file_name) {
+		itsAtCertSave2File = file_name;
+       		return true;
+	};
+	std::string &GetItsAtCertSave2File() {
+		return itsAtCertSave2File;
+	};
+
+	bool SetItsAtVerificationKeySave2File(std::string file_name) {
+		itsAtVerificationKeySave2File = file_name;
+       		return true;
+	};
+	std::string &GetItsAtVerificationKeySave2File() {
+		return itsAtVerificationKeySave2File;
+	};
+	
+	bool SetItsAtEncryptionKeySave2File(std::string file_name) {
+		itsAtEncryptionKeySave2File = file_name;
+       		return true;
+	};
+	std::string &GetItsAtEncryptionKeySave2File() {
+		return itsAtEncryptionKeySave2File;
+	};
+
+	bool CheckAtEnrollmentArguments();
+	
+	bool GetItsRegisterRequest(std::string &);
 	bool IEEE1609dot2_Sign(OCTETSTRING &, OCTETSTRING &, void *, OCTETSTRING &, OCTETSTRING &);
 
-	void *GetItsEcVerificationKey() { return itsEcVerificationKey; };
-	void *GetItsEcEncryptionKey() { return (itsEcEncryptionKeyEnable ? itsEcEncryptionKey : NULL); };
-	void *GetItsAtVerificationKey() { return itsAtVerificationKey; };
-	void *GetItsAtEncryptionKey() { return (itsAtEncryptionKeyEnable ? itsAtEncryptionKey : NULL); };
-	void *GetItsTechnicalKey() { return technicalKey; };
-
-	bool GetPublicVerificationKey(void *, IEEE1609dot2BaseTypes::PublicVerificationKey &);
 	bool GetItsEcPublicVerificationKey(IEEE1609dot2BaseTypes::PublicVerificationKey &);
 	bool GetItsAtPublicVerificationKey(IEEE1609dot2BaseTypes::PublicVerificationKey &);
-	bool GetPublicEncryptionKey(void *, IEEE1609dot2BaseTypes::PublicEncryptionKey &);
 	bool GetItsEcPublicEncryptionKey(IEEE1609dot2BaseTypes::PublicEncryptionKey &);
 	bool GetItsAtPublicEncryptionKey(IEEE1609dot2BaseTypes::PublicEncryptionKey &);
-	OCTETSTRING &GetEAId() { return eaId; };
-	OCTETSTRING &GetEACertBlob() { return eaCert_blob;};
-	OCTETSTRING &GetAAId() { return aaId; };
-	OCTETSTRING &GetAACertBlob() { return aaCert_blob;};
 
-	OCTETSTRING &GetItsEcId() { return itsEcId; };
-	OCTETSTRING &GetItsEcCertBlob() { return itsEcCert_blob; };
-	std::string &GetItsEcCertSave2File() { return itsEcCertSave2File; };
-	std::string &GetItsEcVerificationKeySave2File() { return itsEcVerificationKeySave2File; };
-	std::string &GetItsEcEncryptionKeySave2File() { return itsEcEncryptionKeySave2File; };
+	OCTETSTRING &GetEAId() {
+		return eaId;
+	};
+	OCTETSTRING &GetEACertBlob() {
+		return eaCert_blob;
+	};
 
-	OCTETSTRING &GetItsAtId() { return itsAtId; };
-	OCTETSTRING &GetItsAtCertBlob() { return itsAtCert_blob; };
-	std::string &GetItsAtCertSave2File() { return itsAtCertSave2File; };
-	std::string &GetItsAtVerificationKeySave2File() { return itsAtVerificationKeySave2File; };
-	std::string &GetItsAtEncryptionKeySave2File() { return itsAtEncryptionKeySave2File; };
+	OCTETSTRING &GetAACertBlob() {
+		return aaCert_blob;
+	};
 
-	bool setCertId(OCTETSTRING &, OCTETSTRING &);
+	OCTETSTRING &GetItsEcId() {
+		return itsEcId;
+	};
+	OCTETSTRING &GetItsEcCertBlob() {
+		return itsEcCert_blob;
+	};
 
 	std::string saveTechnicalKeyFile;
-    	void *technicalKey = NULL;
 
 	int debug = 0;
 };

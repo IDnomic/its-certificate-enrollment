@@ -48,13 +48,13 @@ ItsPkiWork::ItsRegister(ItsPkiInternalData &idata)
 	std::string request;
 
 	if (!idata.GetItsRegisterRequest(request))   {
-		ERROR_STREAMC << "error " << idata.GetLastErrorStr() << std::endl;
+		ERROR_STREAMC << "ItsPkiWork::ItsRegister() failed to get Its Register request" << std::endl;
 		return false;
 	}
 
 	DEBUGC_STREAM << "register request: \"" << request << "\"" << std::endl;
 
-	if (!ECKey_PrivateKeyToFile(idata.technicalKey, idata.saveTechnicalKeyFile.c_str()))
+	if (!ECKey_PrivateKeyToFile(idata.GetItsTechnicalKey(), idata.saveTechnicalKeyFile.c_str()))
 		return false;
 
 	return true; 
@@ -283,6 +283,11 @@ ItsPkiWork::EncryptSignedData_ForEa(ItsPkiInternalData &idata, OCTETSTRING &tbe,
 	DEBUGC_STREAM_CALLED;
 
 	OCTETSTRING cert_blob = idata.GetEACertBlob();
+	if (cert_blob.lengthof() == 0)   {
+		ERROR_STREAMC << "invalid EA recipient's certificate blob" << std::endl;
+		return false;
+	}
+
 	IEEE1609dot2::CertificateBase cert = decEtsiTs103097Certificate(cert_blob);
 	dump_ttcn_object(cert, "recipient certificate: ");
         if (!cert.toBeSigned().encryptionKey().is_present())   {
@@ -467,6 +472,11 @@ bool
 ItsPkiWork::EcEnrollmentRequest_Create(ItsPkiInternalData &idata, OCTETSTRING &request_encoded)
 {
 	DEBUGC_STREAM_CALLED;
+	
+	if (!idata.CheckEcEnrollmentArguments())   {
+		ERROR_STREAMC << "ItsPkiWork::EcEnrollmentRequest_Create() invalid internal EC enrollment request data" << std::endl;
+		return false;
+	}
 
 	// InnerEcRequest
 	EtsiTs102941TypesEnrolment::InnerEcRequest inner_ec_request;
@@ -737,6 +747,11 @@ bool
 ItsPkiWork::AtEnrollmentRequest_InnerAtRequest(ItsPkiInternalData &idata, OCTETSTRING &ret)
 {
 	DEBUGC_STREAM_CALLED;
+
+	if (!idata.CheckAtEnrollmentArguments())   {
+		ERROR_STREAMC << "ItsPkiWork::AtEnrollmentRequest_InnerAtRequest() invalid internal AT enrollment data" << std::endl;
+		return false;
+	}
 
 	IEEE1609dot2BaseTypes::PublicVerificationKey v_pubkey;
         if (!idata.GetItsAtPublicVerificationKey(v_pubkey))   {

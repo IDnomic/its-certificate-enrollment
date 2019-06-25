@@ -14,9 +14,9 @@
 #include "EtsiTs103097Module.hh"
 #include "EtsiTs102941TypesEnrolment.hh"
 #include "EtsiTs102941MessagesCa.hh"
-#include "pki-its-internal-data.hh"
-#include "pki-its-etsi.hh"
-// #include "pki-its-report.hh"
+
+#include "its/pki-its-internal-data.hh"
+#include "its/pki-its-etsi.hh"
 
 class ItsPkiException : public std::exception {
 private:
@@ -31,6 +31,8 @@ private:
 	ItsPkiEtsi etsiServices;
 	ItsPkiInternalData *idata = NULL;
 
+	bool GetIEEE1609dot2Signature(ItsPkiInternalData &, OCTETSTRING &, OCTETSTRING &, void *, IEEE1609dot2BaseTypes::Signature &);
+
 public:
 	void *work_data = NULL;
 
@@ -44,8 +46,6 @@ public:
 
 	bool ItsRegister(ItsPkiInternalData &);
 	
-	bool GetIEEE1609dot2Signature(ItsPkiInternalData &, OCTETSTRING &, OCTETSTRING &, void *, IEEE1609dot2BaseTypes::Signature &);
-
 	bool EncryptSignedData_ForEa(ItsPkiInternalData &, OCTETSTRING &, OCTETSTRING &);
 	bool EncryptSignedData_ForEa(ItsPkiInternalData &, OCTETSTRING &, IEEE1609dot2::Ieee1609Dot2Data &);
 	bool EncryptSignedData_ForAa(ItsPkiInternalData &, OCTETSTRING &, OCTETSTRING &);

@@ -193,4 +193,3 @@ ItsPkiCmdArguments::ItsPkiCmdArguments(int argc, const char *argv[])
 		this->validated = false;
         }
 }
-

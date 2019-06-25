@@ -6,46 +6,27 @@
 
 #include "its/utils.hh"
 #include "its/pki-its-debug.hh"
-#include "its/pki-its-cmd-args.hh"
 #include "its/pki-its-internal-data.hh"
 #include "its/its-asn1-modules.hh"
 
 
-ItsPkiInternalData::ItsPkiInternalData(ItsPkiCmdArguments &cmd_args)
+ItsPkiInternalData::ItsPkiInternalData()
 {
 	DEBUGC_STREAM_CALLED;
 	init();
-	valid = ParseCmdArguments(cmd_args);
-	if (!valid)
-		ERROR_STREAMC << "Cannot parse command line arguments" << std::endl;
-	DEBUGC_STREAM << "internal data validated" << std::endl;
-}
-	
- 
-ItsPkiInternalData::ItsPkiInternalData(type_cmd_operation_t cmd, ItsPkiCmdArguments &cmd_args)
-{
-	DEBUGC_STREAM_CALLED;
-	init();
-	if (cmd == CMD_TYPE_EC_CREATE_ENROLL_REQUEST)
-		valid = ParseEcEnrollmentCmdArguments(cmd_args);
-	else 	
-		valid = ParseCmdArguments(cmd_args);
-	if (!valid)
-		ERROR_STREAMC << "Cannot parse command line arguments" << std::endl;
-	DEBUGC_STREAM << "internal data validated" << std::endl;
 }
 	
  
 bool
-ItsPkiInternalData::CreateCanonicalID(ItsPkiCmdArguments &cmd_args)
+ItsPkiInternalData::SetCanonicalID(const std::string &id, const std::string &its_name_header)
 {
 	struct timespec ts;
         struct tm *htm = NULL;
 
 	DEBUGC_STREAM_CALLED;
 
-	if (!cmd_args.its_canonical_id.empty())    {
-		its_canonical_id = cmd_args.its_canonical_id;
+	if (!id.empty())    {
+		its_canonical_id = id;
 		
 		DEBUGC_STREAM_RETURNS_OK;
 		return true;
@@ -77,7 +58,7 @@ ItsPkiInternalData::CreateCanonicalID(ItsPkiCmdArguments &cmd_args)
 	}
 
 	its_canonical_id = string_format("%s-%i%02i%02i-%02X%02X%02X%02X%02X%02X%02X%02X",
-			cmd_args.its_name_header.empty() ? DEFAULT_ITS_CANONICAL_ID_HEADER : cmd_args.its_name_header.c_str(),
+			its_name_header.empty() ? DEFAULT_ITS_CANONICAL_ID_HEADER : its_name_header.c_str(),
 			htm->tm_year + 1900, htm->tm_mon + 1, htm->tm_mday,
 			h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7]);
 
@@ -103,24 +84,25 @@ ItsPkiInternalData::~ItsPkiInternalData()
 
 
 bool
-ItsPkiInternalData::BuildAidSsp(ItsPkiCmdArguments &cmd_args)
+ItsPkiInternalData::SetAidSsp(const long app_perms_psid,
+		const std::string &app_perms_ssp_opaque, const std::string &app_perms_ssp_bitmap)
 {
 	DEBUGC_STREAM_CALLED;
 
-	if (cmd_args.app_perms_psid == 0)  {
+	if (app_perms_psid == 0)  {
 		ERROR_STREAMC << "missing mandatory 'app-perms-psid' argument" << std::endl;
 		return false;
 	}
 
-	psid_ssp.psid = cmd_args.app_perms_psid;
+	psid_ssp.psid = app_perms_psid;
 
-	if (!cmd_args.app_perms_ssp_opaque.empty())    {
-		if ((cmd_args.app_perms_ssp_opaque.length() % 2) != 0)   {
+	if (!app_perms_ssp_opaque.empty())    {
+		if ((app_perms_ssp_opaque.length() % 2) != 0)   {
 			ERROR_STREAMC << "invalid 'app-perms-ssp opaque' hex string" << std::endl;
 			return false;
 		}
 
-		psid_ssp.ssp = str2oct(cmd_args.app_perms_ssp_opaque.c_str());
+		psid_ssp.ssp = str2oct(app_perms_ssp_opaque.c_str());
 		if (!psid_ssp.ssp.is_bound())   {
 			ERROR_STREAMC << "invalid SSP opaque hex string" << std::endl;
 			return false;
@@ -128,13 +110,13 @@ ItsPkiInternalData::BuildAidSsp(ItsPkiCmdArguments &cmd_args)
 
 		psid_ssp.type = IEEE1609dot2BaseTypes::ServiceSpecificPermissions::ALT_opaque;
 	}
-	else if (!cmd_args.app_perms_ssp_bitmap.empty())    {
-		if ((cmd_args.app_perms_ssp_bitmap.length() % 2) != 0)   {
+	else if (!app_perms_ssp_bitmap.empty())    {
+		if ((app_perms_ssp_bitmap.length() % 2) != 0)   {
 			ERROR_STREAMC << "invalid 'app-perms-ssp bitmap' hex string" << std::endl;
 			return false;
 		}
 
-		psid_ssp.ssp = str2oct(cmd_args.app_perms_ssp_bitmap.c_str());
+		psid_ssp.ssp = str2oct(app_perms_ssp_bitmap.c_str());
 		if (!psid_ssp.ssp.is_bound())   {
 			ERROR_STREAMC << "invalid PSID SSP hex string" << std::endl;
 			return false;
@@ -151,6 +133,30 @@ ItsPkiInternalData::BuildAidSsp(ItsPkiCmdArguments &cmd_args)
 	return true;
 }
 
+
+bool
+ItsPkiInternalData::CheckAidSsp()
+{
+	DEBUGC_STREAM_CALLED;
+
+	if (psid_ssp.psid == 0)
+		return false;
+
+	if (psid_ssp.type == IEEE1609dot2BaseTypes::ServiceSpecificPermissions::ALT_opaque)   {
+		if (!psid_ssp.ssp.is_bound())
+			return false;
+	}
+	else if (psid_ssp.type == IEEE1609dot2BaseTypes::ServiceSpecificPermissions::ALT_bitmapSsp)   {
+		if (!psid_ssp.ssp.is_bound())
+			return false;
+	}
+	else   {
+		return false;
+	}
+
+	DEBUGC_STREAM_RETURNS_OK;
+	return true;
+}
 
 bool
 ItsPkiInternalData::GetPublicVerificationKey(void *ec_key, IEEE1609dot2BaseTypes::PublicVerificationKey &pubkey)
@@ -291,7 +297,7 @@ ItsPkiInternalData::IEEE1609dot2_Sign(OCTETSTRING &data, OCTETSTRING &signer,
 
 
 bool
-ItsPkiInternalData::setCertId(OCTETSTRING &cert_raw, OCTETSTRING &ret_certId)
+ItsPkiInternalData::getCertId(OCTETSTRING &cert_raw, OCTETSTRING &ret_certId)
 {
 	DEBUGC_STREAM_CALLED;
 	
@@ -302,7 +308,7 @@ ItsPkiInternalData::setCertId(OCTETSTRING &cert_raw, OCTETSTRING &ret_certId)
 
 	IEEE1609dot2::VerificationKeyIndicator vKeyIndicator = cert.toBeSigned().verifyKeyIndicator();
 	if (!vKeyIndicator.ischosen(IEEE1609dot2::VerificationKeyIndicator::ALT_verificationKey))   {
-		ERROR_STREAMC << "ItsPkiInternalData::setEncryptionKey() not supported type of VerificationKeyIndicator" << std::endl;
+		ERROR_STREAMC << "ItsPkiInternalData::SetCertID() not supported type of VerificationKeyIndicator" << std::endl;
 		return false;	
 	}
 
@@ -310,13 +316,13 @@ ItsPkiInternalData::setCertId(OCTETSTRING &cert_raw, OCTETSTRING &ret_certId)
 	if (pubKey.ischosen(IEEE1609dot2BaseTypes::PublicVerificationKey::ALT_ecdsaNistP256) || 
 			pubKey.ischosen(IEEE1609dot2BaseTypes::PublicVerificationKey::ALT_ecdsaBrainpoolP256r1))   {
 		if (!OpenSSL_SHA256_HashedID(cert_raw, ret_certId))   {
-			ERROR_STREAMC << "OpenSSL SHA256 HashedID failed" << std::endl;
+			ERROR_STREAMC << "ItsPkiInternalData::SetCertID() OpenSSL SHA256 HashedID failed" << std::endl;
 			return false;
 		}
 	}
 	else if (pubKey.ischosen(IEEE1609dot2BaseTypes::PublicVerificationKey::ALT_ecdsaBrainpoolP384r1))   {
 		if (!OpenSSL_SHA384_HashedID(cert_raw, ret_certId))   {
-			ERROR_STREAMC << "OpenSSL SHA384 HashedID failed" << std::endl;
+			ERROR_STREAMC << "ItsPkiInternalData::SetCertID() OpenSSL SHA384 HashedID failed" << std::endl;
 			return false;
 		}
 	}
@@ -393,7 +399,7 @@ ItsPkiInternalData::setEncryptionKey(OCTETSTRING &cert_raw, void **ret_key)
 
 
 bool
-ItsPkiInternalData::setEAEncryptionKey(OCTETSTRING &data)
+ItsPkiInternalData::SetEAEncryptionKey(OCTETSTRING &data)
 {
 	DEBUGC_STREAM_CALLED;
 
@@ -401,11 +407,13 @@ ItsPkiInternalData::setEAEncryptionKey(OCTETSTRING &data)
 		DEBUGC_STREAM << "ItsPkiInternalData::setEACertificate() cannot set EA encryption key" << std::endl;
 		return false;
 	}
-	if (!ItsPkiInternalData::setCertId(data, eaId))   {
+	if (!ItsPkiInternalData::getCertId(data, eaId))   {
 		DEBUGC_STREAM << "ItsPkiInternalData::setEACertificate() cannot set ID of EA certificate" << std::endl;
 		return false;
 	}
 	dump_ttcn_object(eaId, "EA ID: ");
+
+	eaCert_blob = data;
 
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
@@ -413,7 +421,7 @@ ItsPkiInternalData::setEAEncryptionKey(OCTETSTRING &data)
 
 
 bool
-ItsPkiInternalData::setAAEncryptionKey(OCTETSTRING &data)
+ItsPkiInternalData::SetAAEncryptionKey(OCTETSTRING &data)
 {
 	DEBUGC_STREAM_CALLED;
 	
@@ -421,11 +429,13 @@ ItsPkiInternalData::setAAEncryptionKey(OCTETSTRING &data)
 		DEBUGC_STREAM << "ItsPkiInternalData::setAACertificate() cannot set AA encryption key" << std::endl;
 		return false;
 	}
-	if (!ItsPkiInternalData::setCertId(data, aaId))   {
+	if (!ItsPkiInternalData::getCertId(data, aaId))   {
 		DEBUGC_STREAM << "ItsPkiInternalData::setAACertificate() cannot set ID of AA certificate" << std::endl;
 		return false;
 	}
 	dump_ttcn_object(aaId, "AA ID: ");
+	
+	aaCert_blob = data;
 
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
@@ -433,94 +443,23 @@ ItsPkiInternalData::setAAEncryptionKey(OCTETSTRING &data)
 
 
 bool
-ItsPkiInternalData::setItsEcId(OCTETSTRING &data)
+ItsPkiInternalData::SetItsEcId(OCTETSTRING &data)
 {
 	DEBUGC_STREAM_CALLED;
 	
-	if (!setCertId(data, itsEcId))   {
-		DEBUGC_STREAM << "ItsPkiInternalData::setCertId(() cannot set Its Ec ID" << std::endl;
+	if (!getCertId(data, itsEcId))   {
+		DEBUGC_STREAM << "ItsPkiInternalData::getCertId(() cannot set Its Ec ID" << std::endl;
 		return false;
 	}
 
 	dump_ttcn_object(itsEcId, "Its Ec ID: ");
+	
+	itsEcCert_blob = data;
+	
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
 }
 
-
-bool
-ItsPkiInternalData::readEACertificateFile(std::string &filename)
-{
-	DEBUGC_STREAM_CALLED;
-	
-	if (!read_bytes(filename, eaCert_blob))
-		return false;
-
-	return setEAEncryptionKey(eaCert_blob);
-}
-
-
-bool
-ItsPkiInternalData::readEACertificateB64(std::string &b64_string)
-{
-	DEBUGC_STREAM_CALLED;
-	
-	eaCert_blob = decode_base64(b64_string.c_str());
-	if (!eaCert_blob.is_bound())
-		return false;
-	
-	return setEAEncryptionKey(eaCert_blob);
-}
-
-
-bool
-ItsPkiInternalData::readAACertificateFile(std::string &filename)
-{
-	DEBUGC_STREAM_CALLED;
-	
-	if (!read_bytes(filename, aaCert_blob))
-		return false;
-
-	return setAAEncryptionKey(aaCert_blob);
-}
-
-
-bool
-ItsPkiInternalData::readAACertificateB64(std::string &b64_string)
-{
-	DEBUGC_STREAM_CALLED;
-
-	aaCert_blob = decode_base64(b64_string.c_str());
-	if (!aaCert_blob.is_bound())
-		return false;
-	
-	return setAAEncryptionKey(aaCert_blob);
-}
-
-
-bool
-ItsPkiInternalData::readItsEcCertificateFile(std::string &filename)
-{
-	DEBUGC_STREAM_CALLED;
-	
-	if (!read_bytes(filename, itsEcCert_blob))
-		return false;
-
-	return setItsEcId(itsEcCert_blob);
-}
-
-
-bool
-ItsPkiInternalData::readItsEcCertificateB64(std::string &b64_string)
-{
-	DEBUGC_STREAM_CALLED;
-	
-	itsEcCert_blob = decode_base64(b64_string.c_str());
-	if (!itsEcCert_blob.is_bound())
-		return false;
-
-	return setItsEcId(itsEcCert_blob);
-}
 
 void
 ItsPkiInternalData::init()
@@ -538,92 +477,100 @@ ItsPkiInternalData::init()
 }
 
 
+#if 0
 bool
-ItsPkiInternalData::ParseEcEnrollmentCmdArguments(ItsPkiCmdArguments &cmd_args)
+ItsPkiInternalData::ParseItsRegisterCmdArguments(ItsPkiCmdArguments &cmd_args)
 {
 	DEBUGC_STREAM_CALLED;
-	
-	if (!cmd_args.its_tkey.empty())
-		technicalKey = ECKey_ReadPrivateKey(cmd_args.its_tkey.c_str());	
-	else if (!cmd_args.its_tkey_b64.empty())
-		technicalKey = ECKey_ReadPrivateKeyB64(cmd_args.its_tkey_b64.c_str());	
+
+	technicalKey = ECKey_GeneratePrivateKey();
 	if (technicalKey == NULL)   {
-		ERROR_STREAMC << "EC enroll: Missing or invalid technical key" << std::endl;
-		return false;
-	}
-
-	if (cmd_args.its_ec_ekey_enable)   {
-		itsEcEncryptionKeyEnable = true;
-		
-		if (!cmd_args.its_ec_ekey.empty())
-			itsEcEncryptionKey = ECKey_ReadPrivateKey(cmd_args.its_ec_ekey.c_str()); 
-		else if (!cmd_args.its_ec_ekey_b64.empty())
-			itsEcEncryptionKey = ECKey_ReadPrivateKeyB64(cmd_args.its_ec_ekey_b64.c_str()); 
-		else 
-			itsEcEncryptionKey = ECKey_GeneratePrivateKey();
-		if (itsEcEncryptionKey == NULL)   {
-			ERROR_STREAMC << "EC enroll: cannot read from file, base64 string or generate the EC encryption key "<< std::endl;
-			return false;
-		}
-	}
-
-	if (!cmd_args.its_ec_vkey.empty())
-		itsEcVerificationKey = ECKey_ReadPrivateKey(cmd_args.its_ec_vkey.c_str()); 
-	else if (!cmd_args.its_ec_vkey_b64.empty())
-		itsEcVerificationKey = ECKey_ReadPrivateKeyB64(cmd_args.its_ec_vkey_b64.c_str()); 
-	else
-		itsEcVerificationKey = ECKey_GeneratePrivateKey();
-	if (itsEcVerificationKey == NULL)   {
-		ERROR_STREAMC << "EC enroll: cannot read from file, base64 string or generate the EC verification key "<< std::endl;
-		return false;
-	}
-
-	if (!cmd_args.eacertfile.empty())   {
-		if (!readEACertificateFile(cmd_args.eacertfile))   {
-			ERROR_STREAMC << "EC enroll: cannot get EA certificate from file '" << cmd_args.eacertfile << "'" << std::endl;
-			return false;
-		}
-	}
-	else if (!cmd_args.eacert_b64.empty())   {   
-		if (!readEACertificateB64(cmd_args.eacert_b64))    {
-			ERROR_STREAMC << "EC enroll: cannot get EA certificate from base64 string" << std::endl;
-			return false;
-		}
-	}
-	else   {
-		ERROR_STREAMC << "EC enroll: EA certificate is mandatory "<< std::endl;
+		ERROR_STREAMC << "Failed to generate technical key" << std::endl;
 		return false;
 	}
 
 	if (!CreateCanonicalID(cmd_args))   {
-		ERROR_STREAMC << "EC enroll: annot compose ITS canonical ID" << std::endl;
+		ERROR_STREAMC << "Cannot create ITS canonical ID " << std::endl;
 		return false;
 	}
-	DEBUGC_STREAM << "EC enroll: ITS Canonical ID: '" << its_canonical_id << "'" << std::endl;
+	DEBUGC_STREAM << "Canonical ID '" << its_canonical_id  << "'" << std::endl;
 
-	if (!BuildAidSsp(cmd_args))   {
-		ERROR_STREAMC << "EC enroll: cannot build ITS AID SSP list" << std::endl;
-		return false;
-	}
-	DEBUGC_STREAM << "ITS AID SSP(id=" << psid_ssp.psid << ",tag=" << psid_ssp.type << ",ssp=" << oct2str(psid_ssp.ssp) << ")" << std::endl;
-
-	hash_algorithm = cmd_args.GetHashAlgorithm();
-
-	if (cmd_args.its_ec_cert_save2file.empty())
-		itsEcCertSave2File = its_canonical_id + "-EC-cert.oer";
+	if (!cmd_args.its_tkey.empty())
+		saveTechnicalKeyFile = cmd_args.its_tkey;
 	else
-		itsEcCertSave2File = cmd_args.its_ec_certfile;
+		saveTechnicalKeyFile = its_canonical_id + "-technical-key.pem";
 	
-	if (cmd_args.its_ec_vkey_save2file.empty())
-		itsEcVerificationKeySave2File = its_canonical_id + "-EC-vkey.pem";
-	else
-		itsEcVerificationKeySave2File = cmd_args.its_ec_vkey_save2file;
+	if (cmd_args.profile.empty())   {
+		ERROR_STREAMC << "Missing mandatory 'profile' argument" << std::endl;
+		return false;
+	}
+	profile = cmd_args.profile;
+	
+	DEBUGC_STREAM_RETURNS_OK;
+	return true;
+}
+#endif
 
-	if (cmd_args.its_ec_ekey_enable)   {
-		if (cmd_args.its_ec_ekey_save2file.empty())
-			itsEcEncryptionKeySave2File = its_canonical_id + "-EC-ekey.pem";
-		else
-			itsEcEncryptionKeySave2File = cmd_args.its_ec_ekey_save2file;
+
+bool
+ItsPkiInternalData::CheckEnrollmentDataEA()
+{
+	DEBUGC_STREAM_CALLED;
+
+	if (!eaCert_blob.is_bound() || eaCert_blob.lengthof() == 0)   {
+		ERROR_STREAMC << "invalid EA certificate blob" << std::endl;
+		return false;
+	}
+	if (eaEncryptionKey == NULL)   {
+		ERROR_STREAMC << "EA encryption key do not set" << std::endl;
+		return false;
+	}
+	if (!eaId.is_bound() || eaId.lengthof() == 0)   {
+		ERROR_STREAMC << "EA ID do not set" << std::endl;
+		return false;
+	}
+
+	DEBUGC_STREAM_RETURNS_OK;
+	return true;
+}
+	
+
+bool
+ItsPkiInternalData::CheckEnrollmentDataAA()
+{
+	DEBUGC_STREAM_CALLED;
+
+	if (!aaCert_blob.is_bound() || aaCert_blob.lengthof() == 0)   {
+		ERROR_STREAMC << "invalid AA certificate blob" << std::endl;
+		return false;
+	}
+	if (aaEncryptionKey == NULL)   {
+		ERROR_STREAMC << "AA encryption key do not set" << std::endl;
+		return false;
+	}
+	if (!aaId.is_bound() || aaId.lengthof() == 0)   {
+		ERROR_STREAMC << "AA ID do not set" << std::endl;
+		return false;
+	}
+
+	DEBUGC_STREAM_RETURNS_OK;
+	return true;
+}
+	
+
+bool
+ItsPkiInternalData::CheckEnrollmentDataItsEc()
+{
+	DEBUGC_STREAM_CALLED;
+
+	if (!itsEcId.is_bound() || itsEcId.lengthof() == 0)   {
+		DEBUGC_STREAM << "missing ITS EC ID" << std::endl;
+		return false;
+	}
+
+	if (!itsEcCert_blob.is_bound() || itsEcCert_blob.lengthof() == 0)   {
+		DEBUGC_STREAM << "missing ITS EC certificatge blob" << std::endl;
+		return false;
 	}
 	
 	DEBUGC_STREAM_RETURNS_OK;
@@ -632,174 +579,85 @@ ItsPkiInternalData::ParseEcEnrollmentCmdArguments(ItsPkiCmdArguments &cmd_args)
 
 
 bool
-ItsPkiInternalData::ParseCmdArguments(ItsPkiCmdArguments &cmd_args)
+ItsPkiInternalData::CheckEcEnrollmentArguments()
 {
 	DEBUGC_STREAM_CALLED;
 	
-	init();
-
-	if (cmd_args.IsCmdItsRegister())   {
-		DEBUGC_STREAM << "Register Operation: " << cmd_args.GetOperation() << std::endl;
-		technicalKey = ECKey_GeneratePrivateKey();
-		if (technicalKey == NULL)   {
-			ERROR_STREAMC << "Failed to generate technical key" << std::endl;
-			return false;
-		}
-
-		if (!CreateCanonicalID(cmd_args))   {
-			ERROR_STREAMC << "Cannot create ITS canonical ID " << std::endl;
-			return false;
-		}
-		DEBUGC_STREAM << "Canonical ID '" << its_canonical_id  << "'" << std::endl;
-
-		if (!cmd_args.its_tkey.empty())
-			saveTechnicalKeyFile = cmd_args.its_tkey;
-		else
-			saveTechnicalKeyFile = its_canonical_id + "-technical-key.pem";
-		
-		if (cmd_args.profile.empty())   {
-			ERROR_STREAMC << "Missing mandatory 'profile' argument" << std::endl;
-			return false;
-		}
-		profile = cmd_args.profile;
+	if (technicalKey == NULL)   {
+		ERROR_STREAMC << "EC enroll: Missing or invalid technical key" << std::endl;
+		return false;
 	}
-	else if (cmd_args.IsCmdEcEnrollRequest())   {
-		if (!ParseEcEnrollmentCmdArguments(cmd_args))   {
-			ERROR_STREAMC << "Invalid EC Enrollment Request arguments" << std::endl;
+	if (itsEcEncryptionKeyEnable)   {
+		if (itsEcEncryptionKey == NULL)   {
+			ERROR_STREAMC << "EC enroll: cannot read from file, base64 string or generate the EC encryption key "<< std::endl;
 			return false;
 		}
 	}
-	else if (cmd_args.IsCmdAtEnrollRequest())   {
-		DEBUGC_STREAM << "At enroll request (" << cmd_args.GetOperation() << ")" << std::endl;
-
-		if (!cmd_args.its_at_ekey.empty())   {
-			itsAtEncryptionKey = ECKey_ReadPrivateKey(cmd_args.its_at_ekey.c_str()); 
-		}
-		else   {
-			itsAtEncryptionKey = ECKey_GeneratePrivateKey();
-			DEBUGC_STREAM << "Generated ITS AT Encryption key" << std::endl;
-		}
-		if (itsAtEncryptionKey == NULL)   {
-			ERROR_STREAMC << "At enroll: cannot read from file or generate At encryption key "<< std::endl;
-			return false;
-		}
-
-		if (!cmd_args.its_at_vkey.empty())   {
-			itsAtVerificationKey = ECKey_ReadPrivateKey(cmd_args.its_at_vkey.c_str()); 
-		}
-		else   {
-			itsAtVerificationKey = ECKey_GeneratePrivateKey();
-		}
-		if (itsAtVerificationKey == NULL)   {
-			ERROR_STREAMC << "At enroll: cannot read from file or generate At verification key "<< std::endl;
-			return false;
-		}
-
-		if (!cmd_args.eacertfile.empty())   {
-			if (!readEACertificateFile(cmd_args.eacertfile))   {
-				ERROR_STREAMC << "At enroll: cannot get EA certificate from file '" << cmd_args.eacertfile << "'" << std::endl;
-				return false;
-			}
-		}
-		else if (!cmd_args.eacert_b64.empty())   {
-			if (!readEACertificateB64(cmd_args.eacert_b64))  {
-				ERROR_STREAMC << "At enroll: cannot get EA certificate from base64 string" << std::endl;
-				return false;
-			}
-		}
-		else   {
-			ERROR_STREAMC << "At enroll: missing mandatory EA certificate"<< std::endl;
-			return false;
-		}
-
-		if (!cmd_args.aacertfile.empty())   {
-			if (!readAACertificateFile(cmd_args.aacertfile))   {
-				ERROR_STREAMC << "At enroll: cannot get AA certificate from file '" << cmd_args.aacertfile << "'" << std::endl;
-				return false;
-			}
-		}
-		else if (!cmd_args.aacert_b64.empty())   {
-			if (!readAACertificateB64(cmd_args.aacert_b64))   {
-				ERROR_STREAMC << "At enroll: cannot get AA certificate from base64 string" << std::endl;
-				return false;
-			}
-		}
-		else   {
-			ERROR_STREAMC << "At enroll: missing mandatory AA certificate" << std::endl;
-			return false;
-		}
-
-		if (!cmd_args.its_ec_certfile.empty())   {
-			if (!readItsEcCertificateFile(cmd_args.its_ec_certfile))   {
-				ERROR_STREAMC << "At enroll: cannot get ITS EC certificate from file '" << cmd_args.its_ec_certfile << "'" << std::endl;
-				return false;
-			}
-		}
-		else if (!cmd_args.its_ec_cert_b64.empty())   {
-			if (!readItsEcCertificateB64(cmd_args.its_ec_cert_b64))   {
-				ERROR_STREAMC << "At enroll: cannot get ITS EC certificate from base64 string" << std::endl;
-				return false;
-			}
-		}
-		else   {
-			ERROR_STREAMC << "At enroll: missing mandatory ITS EC certificate" << std::endl;
-			return false;
-		}
-
-		if (!cmd_args.its_ec_vkey.empty())
-			itsEcVerificationKey = ECKey_ReadPrivateKey(cmd_args.its_ec_vkey.c_str()); 
-		else if (!cmd_args.its_ec_vkey_b64.empty())
-			itsEcVerificationKey = ECKey_ReadPrivateKeyB64(cmd_args.its_ec_vkey_b64.c_str()); 
-		if (itsEcVerificationKey == NULL)   {
-			ERROR_STREAMC << "At enroll: cannot read ITS EC verification key from file or from base64 string" << std::endl;
-			return false;
-		}
-		
-		if (!CreateCanonicalID(cmd_args))   {
-			ERROR_STREAMC << "At enroll: Canonical ID From EC certificate failed" << std::endl;
-			return false;
-		}
-		DEBUGC_STREAM << "At enroll: ITS canonical ID '" << its_canonical_id  << "'" << std::endl;
-
-		if (!BuildAidSsp(cmd_args))   {
-			ERROR_STREAMC << "Cannot build ITS AID SSP list" << std::endl;
-			return false;
-		}
-		DEBUGC_STREAM << "ITS AID SSP(id=" << psid_ssp.psid << ",tag=" << psid_ssp.type << ",ssp=" << oct2str(psid_ssp.ssp) << ")" << std::endl;
-
-		hash_algorithm = cmd_args.GetHashAlgorithm();
-
-		if (cmd_args.its_at_cert_save2file.empty())   {
-			if (!its_canonical_id.empty())
-				itsAtCertSave2File = its_canonical_id + "-AT-cert.oer";
-		}
-		else   {
-			itsAtCertSave2File = cmd_args.its_at_cert_save2file;
-		}
-		
-		if (cmd_args.its_at_vkey_save2file.empty())   {
-			if (!its_canonical_id.empty())
-				itsAtVerificationKeySave2File = its_canonical_id + "-AT-vkey.pem";
-		}
-		else   {
-			itsAtVerificationKeySave2File = cmd_args.its_at_vkey_save2file;
-		}
-
-		if (cmd_args.its_at_ekey_enable)   {
-			itsAtEncryptionKeyEnable = true;
-			if (cmd_args.its_at_ekey_save2file.empty())   {
-				if (!its_canonical_id.empty())
-					itsAtEncryptionKeySave2File = its_canonical_id + "-AT-ekey.pem";
-			}
-			else    {
-				itsAtEncryptionKeySave2File = cmd_args.its_at_ekey_save2file;
-			}
-		}
-
-		DEBUGC_STREAM << "AA Enrollment request: internal data OK" << std::endl;
+	if (itsEcVerificationKey == NULL)   {
+		ERROR_STREAMC << "EC enroll: cannot read from file, base64 string or generate the EC verification key "<< std::endl;
+		return false;
 	}
-	else   {
-		ERROR_STREAMC << "not supported operation '" << cmd_args.GetOperation() << "'" << std::endl;
+	if (!CheckEnrollmentDataEA())   {
+		ERROR_STREAMC << "EC enroll: invalid EA parameters" << std::endl;
+		return false;
+	}
+	if (its_canonical_id.empty())   {
+		ERROR_STREAMC << "EC enroll: ITS canonical ID do not set" << std::endl;
+		return false;
+	}
+	if (!CheckAidSsp())   {
+		ERROR_STREAMC << "EC enroll: invalid ITS AID SSP" << std::endl;
+		return false;
+	}
+	if ((hash_algorithm != IEEE1609dot2BaseTypes::HashAlgorithm::sha256) && (hash_algorithm != IEEE1609dot2BaseTypes::HashAlgorithm::sha384))   {
+		ERROR_STREAMC << "EC enroll: invalid hash algorithm" << std::endl;
+		return false;
+	}
+
+	DEBUGC_STREAM_RETURNS_OK;
+	return true;
+}
+
+bool
+ItsPkiInternalData::CheckAtEnrollmentArguments()
+{
+	DEBUGC_STREAM_CALLED;
+	
+	if (itsAtEncryptionKey == NULL)   {
+		ERROR_STREAMC << "At enrollment internal data: needs ITS AT encryption key " << std::endl;
+		return false;
+	}
+
+	if (itsAtVerificationKey == NULL)   {
+		ERROR_STREAMC << "At enroll internal data: needs ITS AT verification key" << std::endl;
+		return false;
+	}
+	if (!CheckEnrollmentDataEA())   {
+		ERROR_STREAMC << "At enroll: invalid EA parameters" << std::endl;
+		return false;
+	}
+	if (!CheckEnrollmentDataAA())   {
+		ERROR_STREAMC << "At enroll: invalid AA parameters" << std::endl;
+		return false;
+	}
+	if (!CheckEnrollmentDataItsEc())   {
+		ERROR_STREAMC << "At enroll: invalid ITS EC data" << std::endl;
+		return false;
+	}
+	if (itsEcVerificationKey == NULL)   {
+		ERROR_STREAMC << "At enroll: missing ITS EC verification key" << std::endl;
+		return false;
+	}
+	if (its_canonical_id.empty())   {
+		ERROR_STREAMC << "At enroll: ITS canonical ID do not set" << std::endl;
+		return false;
+	}
+	if (!CheckAidSsp())   {
+		ERROR_STREAMC << "at enroll: invalid ITS AID SSP" << std::endl;
+		return false;
+	}
+	if ((hash_algorithm != IEEE1609dot2BaseTypes::HashAlgorithm::sha256) && (hash_algorithm != IEEE1609dot2BaseTypes::HashAlgorithm::sha384))   {
+		ERROR_STREAMC << "At enroll: invalid hash algorithm" << std::endl;
 		return false;
 	}
 
