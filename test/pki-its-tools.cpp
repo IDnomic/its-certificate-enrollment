@@ -9,11 +9,11 @@
 #include "EtsiTs103097Module.hh"
 
 #include "its/pki-its-debug.hh"
-#include "its/pki-its-cmd-args.hh"
 #include "its/pki-its-internal-data.hh"
 #include "its/pki-its-work.hh"
 #include "its/utils.hh"
 
+#include "pki-its-cmd-args.hh"
 #include "utils-curl.hh"
 
 using namespace boost::program_options;
