@@ -6,7 +6,7 @@
 #include <boost/program_options.hpp>
 
 #include "its/utils.hh"
-#include "pki-its-cmd-args.hh"
+#include "itspki-cmd-args.hh"
 
 using namespace boost::program_options;
 namespace po  = boost::program_options;

@@ -18,9 +18,9 @@
 #include "EtsiTs102941MessagesCa.hh"
 
 #include "its/utils.hh"
-#include "its/pki-its-debug.hh"
-#include "its/pki-its-work.hh"
-#include "its/pki-its-etsi.hh"
+#include "its/itspki-debug.hh"
+#include "its/itspki-work.hh"
+#include "its/itspki-etsi.hh"
 
 
 bool ItsPkiException::initialized = false;

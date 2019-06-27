@@ -16,7 +16,7 @@
 #include <openssl/conf.h>
 #include <openssl/engine.h>
 
-#include "its/pki-its-debug.hh"
+#include "its/itspki-debug.hh"
 #include "its/utils-ttcn.hh"
 #include "its/utils-openssl.hh"
 

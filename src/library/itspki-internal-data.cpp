@@ -5,8 +5,8 @@
 #include <boost/program_options.hpp>
 
 #include "its/utils.hh"
-#include "its/pki-its-debug.hh"
-#include "its/pki-its-internal-data.hh"
+#include "its/itspki-debug.hh"
+#include "its/itspki-internal-data.hh"
 #include "its/its-asn1-modules.hh"
 
 

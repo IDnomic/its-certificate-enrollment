@@ -15,8 +15,8 @@
 #include "EtsiTs102941TypesEnrolment.hh"
 #include "EtsiTs102941MessagesCa.hh"
 
-#include "its/pki-its-internal-data.hh"
-#include "its/pki-its-etsi.hh"
+#include "its/itspki-internal-data.hh"
+#include "its/itspki-etsi.hh"
 
 class ItsPkiException : public std::exception {
 private:

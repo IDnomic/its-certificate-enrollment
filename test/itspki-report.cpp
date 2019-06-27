@@ -19,10 +19,10 @@
 #include "EtsiTs103097Module.hh"
 #include "EtsiTs102941MessagesCa.hh"
 
-#include "its/pki-its-debug.hh"
+#include "its/itspki-debug.hh"
 
 #include "utils-curl.hh"
-#include "pki-its-report.hh"
+#include "itspki-report.hh"
 
 
 bool

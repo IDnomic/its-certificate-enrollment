@@ -11,7 +11,7 @@
 #include <openssl/pem.h>
 
 #include "its/utils-ttcn.hh"
-#include "its/pki-its-debug.hh"
+#include "its/itspki-debug.hh"
 
 #ifdef ITS_PKI_DEBUG 
 bool

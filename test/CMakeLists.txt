@@ -9,10 +9,10 @@ pkg_check_modules(ETSITS102941 REQUIRED EtsiTs102941)
 
 add_executable( unit_tests
     itspki-tests.cpp
-    pki-its-report.cpp
+    itspki-report.cpp
     utils-curl.cpp
-    pki-its-cmd-args.cpp
-    pki-its-tools.cpp
+    itspki-cmd-args.cpp
+    itspki-tools.cpp
     )
 
 

@@ -8,7 +8,7 @@
 #include <boost/program_options.hpp>
 
 #include "its/its-asn1-modules.hh"
-#include "its/pki-its-internal-data.hh"
+#include "its/itspki-internal-data.hh"
 
 #define CMD_ARGUMENT_COMMAND "command"
 #define CMD_ARGUMENT_FORMAT "output-format"

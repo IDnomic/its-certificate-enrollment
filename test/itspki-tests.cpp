@@ -1,7 +1,7 @@
 #include "gtest/gtest.h"
-#include "pki-its-cmd-args.hh"
-#include "its/pki-its-internal-data.hh"
-#include "its/pki-its-work.hh"
+#include "itspki-cmd-args.hh"
+#include "its/itspki-internal-data.hh"
+#include "its/itspki-work.hh"
 
 const char *its_tkey =    "MHcCAQEEIGjdbEK4O35mcWTsC7LhY/YoZdZINpu16Zm3JQQVZb7CoAoGCCqGSM49AwEHoUQDQgAE5vxO9sNaJqWdkBj19TWHY0yWwRHvPxiWTxjQEEIRS07b8uA3mCmkWg8blGwa2uItzd5Djdgpxjwv3TWVaedxoA==";
 const char *its_ec_vkey = "MHcCAQEEIGjdbEK4O35mcWTsC7LhY/YoZdZINpu16Zm3JQQVZb7CoAoGCCqGSM49AwEHoUQDQgAE5vxO9sNaJqWdkBj19TWHY0yWwRHvPxiWTxjQEEIRS07b8uA3mCmkWg8blGwa2uItzd5Djdgpxjwv3TWVaedxoA==";

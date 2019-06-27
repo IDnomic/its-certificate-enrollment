@@ -8,12 +8,12 @@
 #include "TTCN3.hh"
 #include "EtsiTs103097Module.hh"
 
-#include "its/pki-its-debug.hh"
-#include "its/pki-its-internal-data.hh"
-#include "its/pki-its-work.hh"
+#include "its/itspki-debug.hh"
+#include "its/itspki-internal-data.hh"
+#include "its/itspki-work.hh"
 #include "its/utils.hh"
 
-#include "pki-its-cmd-args.hh"
+#include "itspki-cmd-args.hh"
 #include "utils-curl.hh"
 
 using namespace boost::program_options;

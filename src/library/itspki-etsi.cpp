@@ -18,8 +18,8 @@
 #include "EtsiTs102941MessagesCa.hh"
 
 #include "its/utils.hh"
-#include "its/pki-its-debug.hh"
-#include "its/pki-its-etsi.hh"
+#include "its/itspki-debug.hh"
+#include "its/itspki-etsi.hh"
 #include "its/its-asn1-modules.hh"
 
 

@@ -6,11 +6,11 @@
 #include <boost/program_options.hpp>
 #include <curl/curl.h>
 
-#include "its/pki-its-debug.hh"
+#include "its/itspki-debug.hh"
 #include "its/utils.hh"
 
 #include "utils-curl.hh"
-#include "pki-its-report.hh"
+#include "itspki-report.hh"
 
 static const char *content_type_str[CURL_CONTENT_TYPE_SIZE + 1] = {
 	"Content-Type: application/x-its-request",
