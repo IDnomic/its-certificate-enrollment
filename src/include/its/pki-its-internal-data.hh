@@ -12,7 +12,6 @@
 #include "EtsiTs103097Module.hh"
 
 #include "its/its-asn1-modules.hh"
-#include "its/pki-its-internal-data.hh"
 
 #include <IEEE1609dot2BaseTypes.hh>
 
@@ -38,6 +37,7 @@ public:
 private:
 	std::string CLASS_NAME = std::string("ItsPkiInternalData");
 	bool valid = false;
+	// std::string last_error_str;
 
 	unsigned char its_id[8];
 	std::string log_line_header;
@@ -111,7 +111,10 @@ public:
 	
 	bool SetCanonicalID(const std::string &, const std::string &);
 	std::string GetCanonicalId() { return its_canonical_id; };
-	
+
+	bool SetProfile(const std::string &_profile) {profile = _profile; return true;};
+	std::string GetProfile() { return profile; };
+
 	bool SetAidSsp(const long, const std::string &, const std::string &);
 	struct PsidSsp &GetAppPermsSsp() { return psid_ssp; };
 	bool CheckAidSsp();
@@ -173,8 +176,6 @@ public:
 		return itsEcEncryptionKeySave2File;
 	};
 
-	bool CheckEcEnrollmentArguments();
-
 	bool SetItsAtVerificationKey(void *key) {
 		itsAtVerificationKey = key;
 		return ((key == NULL) ? false : true);
@@ -220,9 +221,10 @@ public:
 		return itsAtEncryptionKeySave2File;
 	};
 
+	bool CheckItsRegisterData();
+	bool CheckEcEnrollmentArguments();
 	bool CheckAtEnrollmentArguments();
-	
-	bool GetItsRegisterRequest(std::string &);
+
 	bool IEEE1609dot2_Sign(OCTETSTRING &, OCTETSTRING &, void *, OCTETSTRING &, OCTETSTRING &);
 
 	bool GetItsEcPublicVerificationKey(IEEE1609dot2BaseTypes::PublicVerificationKey &);

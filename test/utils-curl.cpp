@@ -12,6 +12,12 @@
 #include "utils-curl.hh"
 #include "pki-its-report.hh"
 
+static const char *content_type_str[CURL_CONTENT_TYPE_SIZE + 1] = {
+	"Content-Type: application/x-its-request",
+	"Content-Type: application/json",
+	NULL
+};
+
 
 size_t
 curl_write_data(void *contents, size_t size, size_t nmemb, void *data)
@@ -38,7 +44,16 @@ curl_write_data(void *contents, size_t size, size_t nmemb, void *data)
 
 
 bool
-Curl_Send(const std::string &url, const std::string &report_url, const std::string &entity, OCTETSTRING &request, OCTETSTRING &response)
+Curl_Send_ItsRequest(const std::string &url, const std::string &report_url, const std::string &entity, OCTETSTRING &request, OCTETSTRING &response)
+{
+	return Curl_Send(url, report_url, entity, X_ITS_REQUEST, NULL, request, response);
+}
+
+
+bool
+Curl_Send(const std::string &url, const std::string &report_url, const std::string &entity,
+	CURL_CONTENT_TYPE content_type, const char *userpwd,
+	OCTETSTRING &request, OCTETSTRING &response)
 {
 	DEBUG_STREAM_CALLED;
 
@@ -69,7 +84,11 @@ Curl_Send(const std::string &url, const std::string &report_url, const std::stri
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, req);
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, req_sz);
 
-		headers = curl_slist_append(headers, "Content-Type: application/x-its-request");
+		// curl_easy_setopt(curl, CURLOPT_USERPWD, "operator:operator");
+		if (userpwd != NULL)
+			curl_easy_setopt(curl, CURLOPT_USERPWD, userpwd);
+
+		headers = curl_slist_append(headers, content_type_str[content_type]);
 		if (headers == NULL)   {
 		    ERROR_STREAM << "CURL: failed to prepare headers" << std::endl;
 		    return false;

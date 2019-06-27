@@ -28,6 +28,45 @@ struct bench_data {
 	unsigned magic;
 };
 
+
+bool
+ItsRegisterRequest_Process(const std::string url, const std::string url_es,
+		ItsPkiInternalData &idata)
+{
+	ItsPkiWork work(idata);
+
+        DEBUG_STREAM_CALLED;
+
+        OCTETSTRING request;
+        if (!work.ItsRegisterRequest_Create(idata, request))  {
+                ERROR_STREAM << "Cannot compose ItsRegister request" << std::endl;
+                return false;
+        }
+	dump_ttcn_object(request, "its register request: ");
+
+        OCTETSTRING response_raw;
+	if (!Curl_Send(url, url_es, idata.GetCanonicalId(), JSON, "operator:operator", request, response_raw))   {
+                ERROR_STREAM << "request send error" << std::endl;
+                return false;
+	}
+	dump_ttcn_object(response_raw, "its register response: ");
+        
+	OCTETSTRING cert_encoded;
+        if (!work.ItsRegisterResponse_Parse(response_raw, cert_encoded))   {
+                ERROR_STREAM << "cannot parse ItsRegister response" << std::endl;
+                return false;
+        }
+
+        if (!work.ItsRegisterResponse_SaveToFiles(idata, cert_encoded))   {
+                ERROR_STREAM << "Failed to save new ITS attributes to files" << std::endl;
+                return false;
+        }
+
+        DEBUG_STREAM_RETURNS_OK;
+        return true;
+}
+
+
 bool
 EcEnrollmentRequest_Process(const std::string url_ea, const std::string url_es,
 		ItsPkiInternalData &idata)
@@ -43,7 +82,7 @@ EcEnrollmentRequest_Process(const std::string url_ea, const std::string url_es,
         }
 
         OCTETSTRING response_raw;
-	if (!Curl_Send(url_ea, url_es, idata.GetCanonicalId(), data_encrypted, response_raw))   {
+	if (!Curl_Send_ItsRequest(url_ea, url_es, idata.GetCanonicalId(), data_encrypted, response_raw))   {
                 ERROR_STREAM << "request send error" << std::endl;
                 return false;
 	}
@@ -98,7 +137,7 @@ ec_thread_handle(void *param)
 
         for (int ii=0; ii < b_data->cycles_num; ii++)   {
                 OCTETSTRING response_raw;
-		if (!Curl_Send(*(b_data->url), *(b_data->url_report), id, work->request_data, response_raw))   {
+		if (!Curl_Send_ItsRequest(*(b_data->url), *(b_data->url_report), id, work->request_data, response_raw))   {
                         pthread_mutex_lock(&thread_print_mutex);
                         std::cout  << "thread " << thread_idx << ": send request error" << std::endl;
                         pthread_mutex_unlock(&thread_print_mutex);
@@ -188,7 +227,7 @@ AtEnrollmentRequest_Process(const std::string url_at, const std::string url_es,
         }
 
         OCTETSTRING response_raw;
-	if (!Curl_Send(url_at, url_es, idata.GetCanonicalId(), atRequest_encoded, response_raw))   {
+	if (!Curl_Send_ItsRequest(url_at, url_es, idata.GetCanonicalId(), atRequest_encoded, response_raw))   {
                 ERROR_STREAM << "request send error" << std::endl;
                 return false;
 	}
@@ -449,98 +488,36 @@ ParseAtEnrollmentCmdArguments(ItsPkiCmdArguments cmd_args, ItsPkiInternalData &i
 bool
 ParseItsRegisterCmdArguments(ItsPkiCmdArguments cmd_args, ItsPkiInternalData &idata)
 {
+	DEBUG_STREAM_CALLED;
+
+	if (cmd_args.profile.empty())   {
+		ERROR_STREAM << "ItsRegister: missing mandatory 'profile' argument" << std::endl;
+		return false;
+	}
+	idata.SetProfile(cmd_args.profile);
+
+	// ITS Technical Key
+	void *key = NULL;
+	if (!cmd_args.its_tkey.empty())
+		key = ECKey_ReadPrivateKey(cmd_args.its_tkey.c_str());	
+	else if (!cmd_args.its_tkey_b64.empty())
+		key = ECKey_ReadPrivateKeyB64(cmd_args.its_tkey_b64.c_str());	
+	else
+		key = ECKey_GeneratePrivateKey();
+	if (!idata.SetItsTechnicalKey(key))   {
+		ERROR_STREAM << "EC enroll: Missing or invalid technical key" << std::endl;
+		return false;
+	}
+
+	// Create/Set ITS canonical ID
+	if (!idata.SetCanonicalID(cmd_args.its_canonical_id, cmd_args.its_name_header))   {
+		ERROR_STREAM << "EC enroll arguments: cannot set ITS canonical ID" << std::endl;
+		return false;
+	}
+	DEBUG_STREAM << "ITS Canonical ID: '" << idata.GetCanonicalId() << "'" << std::endl;
+
+	DEBUG_STREAM_RETURNS_OK;
         return true;
 }
 
 
-int
-_main(int argc, const char *argv[])
-{
-	ItsPkiCmdArguments cmd_args(argc, argv);
-	
-	if (!cmd_args.ValidateOperation())   {
-		std::cerr << "Invalid command argument: '" << cmd_args.GetLastErrorString() << "'" << std::endl;
-	}
-	else if (cmd_args.IsCmdHelp())  {
-		cmd_args.PrintHelp(std::cout);
-		std::cerr << "Enable: '" << cmd_args.its_ec_ekey_enable << "'" << std::endl;
-	}
-	else if (cmd_args.IsCmdInfo())   {
-		OCTETSTRING os_18;
-		if (!read_bytes(cmd_args.GetInputFile(), os_18))   {
-			std::cerr << "Cannot read data from file '" << cmd_args.GetInputFile() << "'" << std::endl;
-			exit(-1);
-		}
-
-		EtsiTs103097Module::module_object.pre_init_module();
-        	IEEE1609dot2::CertificateBase ret = decEtsiTs103097Certificate(os_18);
-		std::cout << "IEEE1609dot2::CertificateBase::Version " << ret.version() << std::endl;
-
-		if (cmd_args.IsFormatJson())   {
-			TTCN_Logger::begin_event(TTCN_Logger::USER_UNQUALIFIED, 1);
-			ret.log();
-			char *res_log = TTCN_Logger::end_event_log2str().to_JSON_string();
-			std::cout << "TTCN-log:\n" << res_log << "\n\n";
-			Free(res_log);
-		}
-		else if (cmd_args.IsFormatYaml())   {
-			YAML::Emitter yaml;
-			yaml << YAML::BeginMap << YAML::Key << "EtsiTs103097Certificate" << YAML::Value;
-			ret.YAML_emitter_write(yaml);
-			yaml << YAML::EndMap;
-			std::cout << "YAML:" << std::endl << yaml.c_str() << std::endl << std::flush;
-		}
-	}
-	else   {
-		do   {
-			if (cmd_args.IsCmdItsRegister())   {
-				ItsPkiInternalData idata;
-
-				if (!ParseItsRegisterCmdArguments(cmd_args, idata))   {
-					std::cerr << "Invalid ITS registration CMD data" << std::endl;
-					break;
-				}
-
-				ItsPkiWork work(idata);
-
-				if (!work.ItsRegister(idata))
-					std::cerr << "Fatal error of ITS registration" << std::endl;
-			}
-			else if (cmd_args.IsCmdEcEnrollRequest())   {
-				ItsPkiInternalData idata;
-
-				if (!ParseEcEnrollmentCmdArguments(cmd_args, idata))   {
-					std::cerr << "Invalid EC enrollment CMD data" << std::endl;
-					break;
-				}
-
-				if (cmd_args.IsBench())   {
-					if (!EcEnrollmentRequest_Bench(cmd_args.url_ea, cmd_args.url_es, cmd_args.cycles_num, cmd_args.threads_num, idata))
-						std::cerr << "Fatal error of Ec Enrollment Request Bench" << std::endl;
-				}
-				else   {
-					if (!EcEnrollmentRequest_Process(cmd_args.url_ea, cmd_args.url_es, idata))
-						std::cerr << "Fatal error of Ec Enrollment Request" << std::endl;
-				}
-			}
-			else if (cmd_args.IsCmdAtEnrollRequest())   {
-				ItsPkiInternalData idata;
-
-				if (!ParseAtEnrollmentCmdArguments(cmd_args, idata))   {
-					std::cerr << "Invalid AT enrollment CMD data" << std::endl;
-					break;
-				}
-
-				if (!AtEnrollmentRequest_Process(cmd_args.url_aa, cmd_args.url_es, idata))
-					std::cerr << "Fatal error of AT Enrollment Request" << std::endl;
-			}
-		} while(0);
-	}
-	
-	TTCN_Logger::clear_parameters();
-	TTCN_EncDec::clear_error();
-	TTCN_Logger::terminate_logger();
-	TTCN_Snapshot::terminate();
-	TTCN_Runtime::clean_up();
-	return 0;
-}

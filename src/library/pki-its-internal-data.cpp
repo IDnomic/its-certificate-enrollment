@@ -15,8 +15,8 @@ ItsPkiInternalData::ItsPkiInternalData()
 	DEBUGC_STREAM_CALLED;
 	init();
 }
-	
- 
+
+
 bool
 ItsPkiInternalData::SetCanonicalID(const std::string &id, const std::string &its_name_header)
 {
@@ -60,7 +60,8 @@ ItsPkiInternalData::SetCanonicalID(const std::string &id, const std::string &its
 	its_canonical_id = string_format("%s-%i%02i%02i-%02X%02X%02X%02X%02X%02X%02X%02X",
 			its_name_header.empty() ? DEFAULT_ITS_CANONICAL_ID_HEADER : its_name_header.c_str(),
 			htm->tm_year + 1900, htm->tm_mon + 1, htm->tm_mday,
-			h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7]);
+			h[0].get_octet(), h[1].get_octet(), h[2].get_octet(), h[3].get_octet(),
+			h[4].get_octet(), h[5].get_octet(), h[6].get_octet(), h[7].get_octet());
 
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
@@ -204,6 +205,7 @@ ItsPkiInternalData::GetItsEcPublicVerificationKey(IEEE1609dot2BaseTypes::PublicV
 	DEBUGC_STREAM_CALLED;
 	return GetPublicVerificationKey(itsEcVerificationKey, pubkey);
 }
+
 
 bool
 ItsPkiInternalData::GetItsAtPublicVerificationKey(IEEE1609dot2BaseTypes::PublicVerificationKey &pubkey)
@@ -513,6 +515,31 @@ ItsPkiInternalData::ParseItsRegisterCmdArguments(ItsPkiCmdArguments &cmd_args)
 
 
 bool
+ItsPkiInternalData::CheckItsRegisterData()
+{
+	DEBUGC_STREAM_CALLED;
+
+	if (technicalKey == NULL)   {
+		ERROR_STREAMC << "Its register: Missing or invalid technical key" << std::endl;
+		return false;
+	}
+
+        if (profile.empty())   {
+		ERROR_STREAM << "Its register: missing or invalid 'profile'" << std::endl;
+		return false;
+	}
+
+	if (its_canonical_id.empty())   {
+		ERROR_STREAMC << "Its register: ITS canonical ID do not set" << std::endl;
+		return false;
+	}
+
+	DEBUGC_STREAM_RETURNS_OK;
+	return true;
+}
+
+
+bool
 ItsPkiInternalData::CheckEnrollmentDataEA()
 {
 	DEBUGC_STREAM_CALLED;
@@ -665,7 +692,7 @@ ItsPkiInternalData::CheckAtEnrollmentArguments()
 	return true;
 }
 
-
+#if 0
 bool
 ItsPkiInternalData::GetItsRegisterRequest(std::string &request_str)
 {
@@ -706,4 +733,4 @@ ItsPkiInternalData::GetItsRegisterRequest(std::string &request_str)
 	DEBUGC_STREAM_RETURNS_OK;
         return true;
 }
-
+#endif

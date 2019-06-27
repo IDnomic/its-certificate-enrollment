@@ -44,12 +44,14 @@ public:
 	ItsPkiInternalData *GetIData() { return idata;};
 	OCTETSTRING request_data;
 
-	bool ItsRegister(ItsPkiInternalData &);
-	
 	bool EncryptSignedData_ForEa(ItsPkiInternalData &, OCTETSTRING &, OCTETSTRING &);
 	bool EncryptSignedData_ForEa(ItsPkiInternalData &, OCTETSTRING &, IEEE1609dot2::Ieee1609Dot2Data &);
 	bool EncryptSignedData_ForAa(ItsPkiInternalData &, OCTETSTRING &, OCTETSTRING &);
 	bool EncryptSignedData_ForAa(ItsPkiInternalData &, OCTETSTRING &, IEEE1609dot2::Ieee1609Dot2Data &);
+
+	bool ItsRegisterRequest_Create(ItsPkiInternalData &, OCTETSTRING &);
+	bool ItsRegisterResponse_Parse(OCTETSTRING &, OCTETSTRING &);
+	bool ItsRegisterResponse_SaveToFiles(ItsPkiInternalData &, OCTETSTRING &);
 
 	bool EcEnrollmentRequest_Create(ItsPkiInternalData &, OCTETSTRING &);
 	bool EcEnrollmentRequest_InnerEcRequest(ItsPkiInternalData &, EtsiTs102941TypesEnrolment::InnerEcRequest &);

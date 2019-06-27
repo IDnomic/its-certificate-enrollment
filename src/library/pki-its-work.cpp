@@ -41,27 +41,6 @@ ItsPkiWork::~ItsPkiWork()
 
 
 bool
-ItsPkiWork::ItsRegister(ItsPkiInternalData &idata)
-{
-	DEBUGC_STREAM_CALLED;
-
-	std::string request;
-
-	if (!idata.GetItsRegisterRequest(request))   {
-		ERROR_STREAMC << "ItsPkiWork::ItsRegister() failed to get Its Register request" << std::endl;
-		return false;
-	}
-
-	DEBUGC_STREAM << "register request: \"" << request << "\"" << std::endl;
-
-	if (!ECKey_PrivateKeyToFile(idata.GetItsTechnicalKey(), idata.saveTechnicalKeyFile.c_str()))
-		return false;
-
-	return true; 
-}
-
-
-bool
 ItsPkiWork::GetIEEE1609dot2Signature(ItsPkiInternalData &idata, OCTETSTRING &data, OCTETSTRING &signer, void *key,
 		IEEE1609dot2BaseTypes::Signature &out_signature)
 {
@@ -121,6 +100,63 @@ ItsPkiWork::GetIEEE1609dot2Signature(ItsPkiInternalData &idata, OCTETSTRING &dat
 
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
+}
+
+
+bool
+ItsPkiWork::ItsRegisterRequest_Create(ItsPkiInternalData &idata, OCTETSTRING &ret)
+{
+        DEBUGC_STREAM_CALLED;
+
+	if (!idata.CheckItsRegisterData())   {
+                ERROR_STREAMC << "invalid Its registration internal data" << std::endl;
+                return false;
+        }
+
+        unsigned char *key_b64 = NULL;
+        size_t key_b64_len = 0;
+
+        if (!ECKey_PublicKeyToMemory(idata.GetItsTechnicalKey(), &key_b64, &key_b64_len))   {
+                ERROR_STREAMC << "cannot write public key to memory" << std::endl;
+                return false;
+        }
+
+	std::string request_str = std::string("{")
+                + "\"canonicalId\":\"" + idata.GetCanonicalId() + "\","
+                + "\"profile\":\"" + idata.GetProfile() + "\","
+                + "\"technicalPublicKey\":\"" + (char *)key_b64 + "\","
+                + "\"status\":\"ACTIVATED\""
+                + "}";
+
+        free(key_b64);
+        key_b64 = NULL;
+
+	ret = OCTETSTRING(request_str.length(), (const unsigned char *)request_str.c_str());
+
+        DEBUGC_STREAM_RETURNS_OK;
+	return true;
+}
+
+
+bool
+ItsPkiWork::ItsRegisterResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING &ret_cert)
+{
+	DEBUGC_STREAM_CALLED;
+
+	DEBUGC_STREAM_RETURNS_OK;
+	return true;
+
+}
+
+
+bool
+ItsPkiWork::ItsRegisterResponse_SaveToFiles(ItsPkiInternalData &idata, OCTETSTRING &request)
+{
+	DEBUGC_STREAM_CALLED;
+
+	DEBUGC_STREAM_RETURNS_OK;
+	return true;
+
 }
 
 
