@@ -8,6 +8,29 @@
 
 // #include <stdarg.h>  // For va_start, etc.
 
+bool
+json_get_tag_value(const std::string &json_str, const char *name, std::string &ret)
+{
+	std::string nm = std::string("\"") + name + "\"";
+        std::size_t found = json_str.find(nm);
+        if (found == std::string::npos)
+		return false;
+	found = json_str.find(":", found + nm.length());
+        if (found == std::string::npos)
+		return false;
+	found = json_str.find("\"", found + 1);
+        if (found == std::string::npos)
+		return false;
+
+	std::size_t value_beg = found + 1;
+        std::size_t value_end = json_str.find("\"", value_beg);
+        if (value_end == std::string::npos)
+		return false;
+
+        ret = json_str.substr(value_beg, value_end - value_beg);
+	return true;
+}
+
 
 std::string
 string_format(const std::string fmt, ...) {

@@ -10,6 +10,7 @@
 
 // template<typename ... Args>
 // std::string string_format(const std::string& format, Args ... args);
+bool json_get_tag_value(const std::string &, const char *, std::string &);
 std::string string_format(const std::string fmt, ...);
 std::string getEnvVar( std::string const & );
 bool read_bytes(const std::string &, OCTETSTRING &);

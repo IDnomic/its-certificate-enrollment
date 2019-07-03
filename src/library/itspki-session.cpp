@@ -151,14 +151,23 @@ ItsPkiSession::ItsRegisterRequest_Create(ItsPkiInternalData &idata, OCTETSTRING 
 }
 
 
+
+
 bool
 ItsPkiSession::ItsRegisterResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING &ret_cert)
 {
 	DEBUGC_STREAM_CALLED;
 
+	OCTETSTRING decoded = str2oct(oct2str(response_raw));
+	std::string resp((const char *)((const unsigned char *)decoded));
+
+	if (!json_get_tag_value(resp, "id", its_id))   {
+		ERROR_STREAMC << "Invalid ITS registration response: no 'id' tag" << std::endl;
+		return false;
+	}
+
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
-
 }
 
 

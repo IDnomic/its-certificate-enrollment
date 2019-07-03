@@ -32,6 +32,7 @@ private:
 	ItsPkiInternalData *idata = NULL;
 
 	void *sessionTechnicalKey = NULL;
+	std::string its_id;
 
 	bool GetIEEE1609dot2Signature(ItsPkiInternalData &, OCTETSTRING &, OCTETSTRING &, void *, IEEE1609dot2BaseTypes::Signature &);
 
@@ -45,6 +46,7 @@ public:
 	
 	void *sessionGetTechnicalKey(ItsPkiInternalData &);
 	std::string sessionGetCanonicalId(ItsPkiInternalData &);
+	std::string sessionGetItsID() { return its_id; };
 	bool sessionCheckEcEnrollmentArguments(ItsPkiInternalData &);
 
 	ItsPkiInternalData *GetIData() { return idata;};
