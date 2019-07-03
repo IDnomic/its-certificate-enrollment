@@ -1,7 +1,7 @@
 #include "gtest/gtest.h"
 #include "itspki-cmd-args.hh"
 #include "its/itspki-internal-data.hh"
-#include "its/itspki-work.hh"
+#include "its/itspki-session.hh"
 
 const char *its_tkey =    "MHcCAQEEIGjdbEK4O35mcWTsC7LhY/YoZdZINpu16Zm3JQQVZb7CoAoGCCqGSM49AwEHoUQDQgAE5vxO9sNaJqWdkBj19TWHY0yWwRHvPxiWTxjQEEIRS07b8uA3mCmkWg8blGwa2uItzd5Djdgpxjwv3TWVaedxoA==";
 const char *its_ec_vkey = "MHcCAQEEIGjdbEK4O35mcWTsC7LhY/YoZdZINpu16Zm3JQQVZb7CoAoGCCqGSM49AwEHoUQDQgAE5vxO9sNaJqWdkBj19TWHY0yWwRHvPxiWTxjQEEIRS07b8uA3mCmkWg8blGwa2uItzd5Djdgpxjwv3TWVaedxoA==";
@@ -33,7 +33,7 @@ TEST(itspki_encode, add)
 	ASSERT_TRUE(ParseEcEnrollmentCmdArguments(cmd_args, idata));
         ASSERT_TRUE(idata.CheckEcEnrollmentArguments());
 
-	ItsPkiWork work(idata);
+	ItsPkiSession session(idata);
         OCTETSTRING data_encrypted;
-	ASSERT_TRUE(work.EcEnrollmentRequest_Create(idata, data_encrypted));
+	ASSERT_TRUE(session.EcEnrollmentRequest_Create(idata, data_encrypted));
 }

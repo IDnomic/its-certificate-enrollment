@@ -18,11 +18,25 @@ ItsPkiInternalData::ItsPkiInternalData()
 
 
 bool
-ItsPkiInternalData::SetCanonicalID(const std::string &id, const std::string &its_name_header)
+ItsPkiInternalData::SetItsNameHeader(const std::string &nm_header)
 {
-	struct timespec ts;
-        struct tm *htm = NULL;
+	DEBUGC_STREAM_CALLED;
 
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME, &ts);
+        struct tm *htm = localtime( &ts.tv_sec );
+
+	its_name_header = nm_header.empty() ? std::string(DEFAULT_ITS_CANONICAL_ID_HEADER) : nm_header;
+	its_name_header += string_format("-%i%02i%02i",  htm->tm_year + 1900, htm->tm_mon + 1, htm->tm_mday);
+	
+	DEBUGC_STREAM_RETURNS_OK;
+	return true;
+}
+
+
+bool
+ItsPkiInternalData::SetCanonicalID(const std::string &id, const std::string &nm_header, void *t_key)
+{
 	DEBUGC_STREAM_CALLED;
 
 	if (!id.empty())    {
@@ -43,23 +57,19 @@ ItsPkiInternalData::SetCanonicalID(const std::string &id, const std::string &its
 		}
 	}
 
-	if (technicalKey == NULL)   {
-		ERROR_STREAMC << "empty Technical Key" << std::endl;
-		return false;
-	}
+	if (!nm_header.empty())
+		SetItsNameHeader(nm_header);
 
-	clock_gettime(CLOCK_REALTIME, &ts);
-        htm = localtime( &ts.tv_sec );
+	if (t_key == NULL)
+		return true;
 
 	OCTETSTRING h;
-    	if (!ECKey_PublicKeyHashedID(technicalKey, h))   {
+    	if (!ECKey_PublicKeyHashedID(t_key, h))   {
 		ERROR_STREAMC << "cannot get HashedID from EC public key" << std::endl;
 		return false;
 	}
 
-	its_canonical_id = string_format("%s-%i%02i%02i-%02X%02X%02X%02X%02X%02X%02X%02X",
-			its_name_header.empty() ? DEFAULT_ITS_CANONICAL_ID_HEADER : its_name_header.c_str(),
-			htm->tm_year + 1900, htm->tm_mon + 1, htm->tm_mday,
+	its_canonical_id = string_format("%s-%02X%02X%02X%02X%02X%02X%02X%02X", its_name_header.c_str(),
 			h[0].get_octet(), h[1].get_octet(), h[2].get_octet(), h[3].get_octet(),
 			h[4].get_octet(), h[5].get_octet(), h[6].get_octet(), h[7].get_octet());
 
@@ -519,13 +529,13 @@ ItsPkiInternalData::CheckItsRegisterData()
 {
 	DEBUGC_STREAM_CALLED;
 
-	if (technicalKey == NULL)   {
-		ERROR_STREAMC << "Its register: Missing or invalid technical key" << std::endl;
-		return false;
-	}
-
         if (profile.empty())   {
 		ERROR_STREAM << "Its register: missing or invalid 'profile'" << std::endl;
+		return false;
+	}
+#if 0
+	if (technicalKey == NULL)   {
+		ERROR_STREAMC << "Its register: Missing or invalid technical key" << std::endl;
 		return false;
 	}
 
@@ -533,7 +543,7 @@ ItsPkiInternalData::CheckItsRegisterData()
 		ERROR_STREAMC << "Its register: ITS canonical ID do not set" << std::endl;
 		return false;
 	}
-
+#endif
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
 }
@@ -609,11 +619,16 @@ bool
 ItsPkiInternalData::CheckEcEnrollmentArguments()
 {
 	DEBUGC_STREAM_CALLED;
-	
+#if 0	
 	if (technicalKey == NULL)   {
 		ERROR_STREAMC << "EC enroll: Missing or invalid technical key" << std::endl;
 		return false;
 	}
+	if (its_canonical_id.empty())   {
+		ERROR_STREAMC << "EC enroll: ITS canonical ID do not set" << std::endl;
+		return false;
+	}
+#endif
 	if (itsEcEncryptionKeyEnable)   {
 		if (itsEcEncryptionKey == NULL)   {
 			ERROR_STREAMC << "EC enroll: cannot read from file, base64 string or generate the EC encryption key "<< std::endl;
@@ -626,10 +641,6 @@ ItsPkiInternalData::CheckEcEnrollmentArguments()
 	}
 	if (!CheckEnrollmentDataEA())   {
 		ERROR_STREAMC << "EC enroll: invalid EA parameters" << std::endl;
-		return false;
-	}
-	if (its_canonical_id.empty())   {
-		ERROR_STREAMC << "EC enroll: ITS canonical ID do not set" << std::endl;
 		return false;
 	}
 	if (!CheckAidSsp())   {

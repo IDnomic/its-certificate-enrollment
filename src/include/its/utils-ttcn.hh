@@ -9,8 +9,11 @@
 #include "EtsiTs103097Module.hh"
 #include "EtsiTs102941MessagesCa.hh"
 #include "EtsiTs102941TypesAuthorization.hh"
+#include "EtsiTs102941TypesEnrolment.hh"
 
 bool dump_ttcn_object(Base_Type &, const char *);
+
+// extern pthread_mutex_t mutex_encode_request;
 
 IEEE1609dot2::CertificateBase decEtsiTs103097Certificate(const OCTETSTRING &);
 IEEE1609dot2::Ieee1609Dot2Data decIeee1609Dot2Data(const OCTETSTRING &);
@@ -28,7 +31,9 @@ inline bool encEtsiTs103097Certificate(EtsiTs103097Module::EtsiTs103097Certifica
 	return ret.is_bound();
 };
 inline bool encToBeSignedData(IEEE1609dot2::ToBeSignedData &obj, OCTETSTRING &ret) {
-	IEEE1609dot2::ToBeSignedData_encoder(obj, ret, "OER");
+	TTCN_Buffer ttcn_buf;
+	obj.OER_encode(IEEE1609dot2::ToBeSignedData_descr_, ttcn_buf);
+	ttcn_buf.get_string(ret);
 	return ret.is_bound();
 };
 inline bool encIeee1609Dot2Data(IEEE1609dot2::Ieee1609Dot2Data &obj, OCTETSTRING &ret) {
@@ -36,7 +41,9 @@ inline bool encIeee1609Dot2Data(IEEE1609dot2::Ieee1609Dot2Data &obj, OCTETSTRING
 	return ret.is_bound();
 };
 inline bool encInnerEcRequest(EtsiTs102941TypesEnrolment::InnerEcRequest &obj, OCTETSTRING &ret) {
-	EtsiTs102941TypesEnrolment::InnerEcRequest_encoder(obj, ret, "OER");
+	TTCN_Buffer ttcn_buf;
+	obj.OER_encode(EtsiTs102941TypesEnrolment::InnerEcRequest_descr_, ttcn_buf);
+	ttcn_buf.get_string(ret);
 	return ret.is_bound();
 };
 inline bool encPublicVerificationKey(IEEE1609dot2BaseTypes::PublicVerificationKey &obj, OCTETSTRING &ret) {

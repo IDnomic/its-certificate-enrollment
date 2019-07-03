@@ -13,6 +13,8 @@
 #include "its/utils-ttcn.hh"
 #include "its/itspki-debug.hh"
 
+pthread_mutex_t mutex_encode_request = PTHREAD_MUTEX_INITIALIZER;
+
 #ifdef ITS_PKI_DEBUG 
 bool
 dump_ttcn_object(Base_Type &obj, const char *title)

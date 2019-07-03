@@ -19,13 +19,13 @@
 
 #include "its/utils.hh"
 #include "its/itspki-debug.hh"
-#include "its/itspki-work.hh"
+#include "its/itspki-session.hh"
 #include "its/itspki-etsi.hh"
 
 
 bool ItsPkiException::initialized = false;
 
-ItsPkiWork::ItsPkiWork(ItsPkiInternalData &_idata)
+ItsPkiSession::ItsPkiSession(ItsPkiInternalData &_idata)
 {
 	TTCN_EncDec::set_error_behavior(TTCN_EncDec::ET_ALL, TTCN_EncDec::EB_DEFAULT);
 	TTCN_EncDec::clear_error();
@@ -34,14 +34,14 @@ ItsPkiWork::ItsPkiWork(ItsPkiInternalData &_idata)
 }
 
 
-ItsPkiWork::~ItsPkiWork()
+ItsPkiSession::~ItsPkiSession()
 {
 	OpenSSL_cleanup();
 }
 
 
 bool
-ItsPkiWork::GetIEEE1609dot2Signature(ItsPkiInternalData &idata, OCTETSTRING &data, OCTETSTRING &signer, void *key,
+ItsPkiSession::GetIEEE1609dot2Signature(ItsPkiInternalData &idata, OCTETSTRING &data, OCTETSTRING &signer, void *key,
 		IEEE1609dot2BaseTypes::Signature &out_signature)
 {
 	DEBUGC_STREAM_CALLED;
@@ -104,7 +104,7 @@ ItsPkiWork::GetIEEE1609dot2Signature(ItsPkiInternalData &idata, OCTETSTRING &dat
 
 
 bool
-ItsPkiWork::ItsRegisterRequest_Create(ItsPkiInternalData &idata, OCTETSTRING &ret)
+ItsPkiSession::ItsRegisterRequest_Create(ItsPkiInternalData &idata, OCTETSTRING &ret)
 {
         DEBUGC_STREAM_CALLED;
 
@@ -112,17 +112,30 @@ ItsPkiWork::ItsRegisterRequest_Create(ItsPkiInternalData &idata, OCTETSTRING &re
                 ERROR_STREAMC << "invalid Its registration internal data" << std::endl;
                 return false;
         }
+	
+	void *t_key = idata.GetItsTechnicalKey();
+
+	if (t_key == NULL)   {
+		if (sessionTechnicalKey == NULL)
+			sessionTechnicalKey = ECKey_GeneratePrivateKey(); 
+		t_key = sessionTechnicalKey;
+	}
+
+	if (t_key == NULL)   {
+                ERROR_STREAMC << "No ITS Technical key" << std::endl;
+                return false;
+	}
 
         unsigned char *key_b64 = NULL;
         size_t key_b64_len = 0;
 
-        if (!ECKey_PublicKeyToMemory(idata.GetItsTechnicalKey(), &key_b64, &key_b64_len))   {
+        if (!ECKey_PublicKeyToMemory(t_key, &key_b64, &key_b64_len))   {
                 ERROR_STREAMC << "cannot write public key to memory" << std::endl;
                 return false;
         }
 
 	std::string request_str = std::string("{")
-                + "\"canonicalId\":\"" + idata.GetCanonicalId() + "\","
+                + "\"canonicalId\":\"" + sessionGetCanonicalId(idata) + "\","
                 + "\"profile\":\"" + idata.GetProfile() + "\","
                 + "\"technicalPublicKey\":\"" + (char *)key_b64 + "\","
                 + "\"status\":\"ACTIVATED\""
@@ -139,7 +152,7 @@ ItsPkiWork::ItsRegisterRequest_Create(ItsPkiInternalData &idata, OCTETSTRING &re
 
 
 bool
-ItsPkiWork::ItsRegisterResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING &ret_cert)
+ItsPkiSession::ItsRegisterResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING &ret_cert)
 {
 	DEBUGC_STREAM_CALLED;
 
@@ -150,23 +163,59 @@ ItsPkiWork::ItsRegisterResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING &re
 
 
 bool
-ItsPkiWork::ItsRegisterResponse_SaveToFiles(ItsPkiInternalData &idata, OCTETSTRING &request)
+ItsPkiSession::ItsRegisterResponse_SaveToFiles(ItsPkiInternalData &idata, OCTETSTRING &request)
 {
 	DEBUGC_STREAM_CALLED;
 
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
+}
 
+
+std::string
+ItsPkiSession::sessionGetCanonicalId(ItsPkiInternalData &idata)
+{
+	DEBUGC_STREAM_CALLED;
+
+	std::string ret = idata.GetCanonicalId();
+	if (!ret.empty())
+		return ret;
+
+	void *key = sessionGetTechnicalKey(idata);
+	if (key == NULL)   {
+		ERROR_STREAMC << "failed: no ITS Technical Key" << std::endl;
+		return ret;
+	}
+
+        OCTETSTRING h;
+	if (!ECKey_PublicKeyHashedID(key, h))   {
+		ERROR_STREAMC << "cannot get HashedID from EC public key" << std::endl;
+		return ret;
+							        
+	}
+
+	ret = string_format("%s-%02X%02X%02X%02X%02X%02X%02X%02X", idata.GetItsNameHeader().c_str(),
+			h[0].get_octet(), h[1].get_octet(), h[2].get_octet(), h[3].get_octet(),
+			h[4].get_octet(), h[5].get_octet(), h[6].get_octet(), h[7].get_octet());
+
+	DEBUGC_STREAM_RETURNS_OK;
+	return ret;
 }
 
 
 bool
-ItsPkiWork::EcEnrollmentRequest_InnerEcRequest(ItsPkiInternalData &idata, EtsiTs102941TypesEnrolment::InnerEcRequest &inner_ec_request)
+ItsPkiSession::EcEnrollmentRequest_InnerEcRequest(ItsPkiInternalData &idata, EtsiTs102941TypesEnrolment::InnerEcRequest &inner_ec_request)
 {
 	DEBUGC_STREAM_CALLED;
+
+	std::string id_str = sessionGetCanonicalId(idata);
+	if (id_str.empty())   {
+		ERROR_STREAMC << "failed: ITS Canonical ID is not set" << std::endl;
+		return false;
+	}
 
 	struct ItsPkiInternalData::PsidSsp idata_psidssp = idata.GetAppPermsSsp();
-	CHARSTRING id = CHARSTRING(idata.GetCanonicalId().c_str());
+	CHARSTRING id = CHARSTRING(id_str.c_str());
 
 	IEEE1609dot2BaseTypes::ServiceSpecificPermissions ssp;
 	if (idata_psidssp.type == IEEE1609dot2BaseTypes::ServiceSpecificPermissions::ALT_opaque)   {
@@ -223,11 +272,11 @@ ItsPkiWork::EcEnrollmentRequest_InnerEcRequest(ItsPkiInternalData &idata, EtsiTs
 
 
 bool
-ItsPkiWork::EcEnrollmentRequest_HeaderInfo(ItsPkiInternalData &idata, IEEE1609dot2::HeaderInfo &header_info)
+ItsPkiSession::EcEnrollmentRequest_HeaderInfo(ItsPkiInternalData &idata, IEEE1609dot2::HeaderInfo &header_info)
 {
 	DEBUGC_STREAM_CALLED;
 	
-	printf("%s +%i: ########## TODO TAI clock ##########\n", __FILE__, __LINE__);
+	// printf("%s +%i: ########## TODO TAI clock ##########\n", __FILE__, __LINE__);
 	struct tm tm_tm = {0, 0, 0, 1, 0, 2004 - 1900, 0, 0, 0}, lt = {0};
 	time_t t = time(NULL);
     	localtime_r(&t, &lt);
@@ -248,7 +297,7 @@ ItsPkiWork::EcEnrollmentRequest_HeaderInfo(ItsPkiInternalData &idata, IEEE1609do
 
 
 bool
-ItsPkiWork::EcEnrollmentRequest_InnerData(ItsPkiInternalData &idata,
+ItsPkiSession::EcEnrollmentRequest_InnerData(ItsPkiInternalData &idata,
 		EtsiTs102941TypesEnrolment::InnerEcRequest &inner_request,
 		IEEE1609dot2::Ieee1609Dot2Data &inner_data)
 {
@@ -314,7 +363,7 @@ ItsPkiWork::EcEnrollmentRequest_InnerData(ItsPkiInternalData &idata,
 
 
 bool
-ItsPkiWork::EncryptSignedData_ForEa(ItsPkiInternalData &idata, OCTETSTRING &tbe, IEEE1609dot2::Ieee1609Dot2Data &ret_encrypted)
+ItsPkiSession::EncryptSignedData_ForEa(ItsPkiInternalData &idata, OCTETSTRING &tbe, IEEE1609dot2::Ieee1609Dot2Data &ret_encrypted)
 {
 	DEBUGC_STREAM_CALLED;
 
@@ -362,7 +411,7 @@ ItsPkiWork::EncryptSignedData_ForEa(ItsPkiInternalData &idata, OCTETSTRING &tbe,
 
 
 bool
-ItsPkiWork::EncryptSignedData_ForEa(ItsPkiInternalData &idata, OCTETSTRING &tbe, OCTETSTRING &ret_encrypted)
+ItsPkiSession::EncryptSignedData_ForEa(ItsPkiInternalData &idata, OCTETSTRING &tbe, OCTETSTRING &ret_encrypted)
 {
 	DEBUGC_STREAM_CALLED;
 
@@ -383,14 +432,14 @@ ItsPkiWork::EncryptSignedData_ForEa(ItsPkiInternalData &idata, OCTETSTRING &tbe,
 
 
 bool
-ItsPkiWork::EncryptSignedData_ForAa(ItsPkiInternalData &idata, OCTETSTRING &tbe, OCTETSTRING &ret_encrypted)
+ItsPkiSession::EncryptSignedData_ForAa(ItsPkiInternalData &idata, OCTETSTRING &tbe, OCTETSTRING &ret_encrypted)
 {
 	return false;
 }
 
 
 bool
-ItsPkiWork::EncryptSignedData_ForAa(ItsPkiInternalData &idata, OCTETSTRING &tbe, IEEE1609dot2::Ieee1609Dot2Data &ret_encrypted)
+ItsPkiSession::EncryptSignedData_ForAa(ItsPkiInternalData &idata, OCTETSTRING &tbe, IEEE1609dot2::Ieee1609Dot2Data &ret_encrypted)
 {
 	DEBUGC_STREAM_CALLED;
 
@@ -427,7 +476,7 @@ ItsPkiWork::EncryptSignedData_ForAa(ItsPkiInternalData &idata, OCTETSTRING &tbe,
 
 
 bool
-ItsPkiWork::EcEnrollmentResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING &ret_cert)
+ItsPkiSession::EcEnrollmentResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING &ret_cert)
 {
 	DEBUGC_STREAM_CALLED;
 
@@ -477,7 +526,7 @@ ItsPkiWork::EcEnrollmentResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING &r
 
 
 bool
-ItsPkiWork::EcEnrollmentResponse_Status(OCTETSTRING &response_raw)
+ItsPkiSession::EcEnrollmentResponse_Status(OCTETSTRING &response_raw)
 {
 	DEBUGC_STREAM_CALLED;
 
@@ -504,13 +553,52 @@ ItsPkiWork::EcEnrollmentResponse_Status(OCTETSTRING &response_raw)
 }
 
 
-bool
-ItsPkiWork::EcEnrollmentRequest_Create(ItsPkiInternalData &idata, OCTETSTRING &request_encoded)
+void *
+ItsPkiSession::sessionGetTechnicalKey(ItsPkiInternalData &idata)
 {
 	DEBUGC_STREAM_CALLED;
-	
+
+	void *key = idata.GetItsTechnicalKey();
+	if (key == NULL)
+		key = sessionTechnicalKey;
+
+	DEBUGC_STREAM_RETURNS_OK;
+	return key; 
+}
+
+
+bool
+ItsPkiSession::sessionCheckEcEnrollmentArguments(ItsPkiInternalData &idata)
+{
+	DEBUGC_STREAM_CALLED;
+
 	if (!idata.CheckEcEnrollmentArguments())   {
-		ERROR_STREAMC << "ItsPkiWork::EcEnrollmentRequest_Create() invalid internal EC enrollment request data" << std::endl;
+		ERROR_STREAMC << "ItsPkiSession::EcEnrollmentRequest_Create() invalid internal EC enrollment request data" << std::endl;
+		return false;
+	}
+
+	if (sessionGetTechnicalKey(idata) == NULL)   {
+		ERROR_STREAMC << "ItsPkiSession::EcEnrollmentRequest_Create() no ITS Technical Key" << std::endl;
+		return false;
+	}
+
+	if (sessionGetCanonicalId(idata).empty())   {
+		ERROR_STREAMC << "ItsPkiSession::EcEnrollmentRequest_Create() cannot get session ITS Canonical ID" << std::endl;
+		return false;
+	}
+
+	DEBUGC_STREAM_RETURNS_OK;
+	return true; 
+}
+
+
+bool
+ItsPkiSession::EcEnrollmentRequest_Create(ItsPkiInternalData &idata, OCTETSTRING &request_encoded)
+{
+	DEBUGC_STREAM_CALLED;
+
+	if (!sessionCheckEcEnrollmentArguments(idata))   {
+		ERROR_STREAMC << "ItsPkiSession::EcEnrollmentRequest_Create() invalid Ec session data" << std::endl;
 		return false;
 	}
 
@@ -569,7 +657,7 @@ ItsPkiWork::EcEnrollmentRequest_Create(ItsPkiInternalData &idata, OCTETSTRING &r
 
 	IEEE1609dot2BaseTypes::Signature signature;
 	OCTETSTRING signer = OCTETSTRING(0, NULL);
-	if (!GetIEEE1609dot2Signature(idata, tbs_encoded, signer, idata.GetItsTechnicalKey(), signature))   {
+	if (!GetIEEE1609dot2Signature(idata, tbs_encoded, signer, sessionGetTechnicalKey(idata), signature))   {
 		ERROR_STREAMC << "failed to sign" << std::endl;
 		return false;
 	}
@@ -604,7 +692,7 @@ ItsPkiWork::EcEnrollmentRequest_Create(ItsPkiInternalData &idata, OCTETSTRING &r
 
 
 bool
-ItsPkiWork::EcEnrollmentResponse_SaveToFiles(ItsPkiInternalData &idata, OCTETSTRING &cert_encoded)
+ItsPkiSession::EcEnrollmentResponse_SaveToFiles(ItsPkiInternalData &idata, OCTETSTRING &cert_encoded)
 {
 	DEBUGC_STREAM_CALLED;
 	
@@ -639,7 +727,7 @@ ItsPkiWork::EcEnrollmentResponse_SaveToFiles(ItsPkiInternalData &idata, OCTETSTR
 
 // At Request
 bool
-ItsPkiWork::AtEnrollmentRequest_HeaderInfo(ItsPkiInternalData &idata, IEEE1609dot2::HeaderInfo &header_info)
+ItsPkiSession::AtEnrollmentRequest_HeaderInfo(ItsPkiInternalData &idata, IEEE1609dot2::HeaderInfo &header_info)
 {
 	DEBUGC_STREAM_CALLED;
 	if (!EcEnrollmentRequest_HeaderInfo(idata, header_info))   {
@@ -653,7 +741,7 @@ ItsPkiWork::AtEnrollmentRequest_HeaderInfo(ItsPkiInternalData &idata, IEEE1609do
 
 
 bool
-ItsPkiWork::AtEnrollmentRequest_SignedExternalPayload(ItsPkiInternalData &idata,
+ItsPkiSession::AtEnrollmentRequest_SignedExternalPayload(ItsPkiInternalData &idata,
 		EtsiTs102941TypesAuthorization::SharedAtRequest &sharedAtRequest,
 		EtsiTs103097Module::EtsiTs103097Data__SignedExternalPayload &ret)
 {
@@ -720,7 +808,7 @@ ItsPkiWork::AtEnrollmentRequest_SignedExternalPayload(ItsPkiInternalData &idata,
 
 
 bool
-ItsPkiWork::AtEnrollmentRequest_POP(ItsPkiInternalData &idata,
+ItsPkiSession::AtEnrollmentRequest_POP(ItsPkiInternalData &idata,
 		EtsiTs102941MessagesCa::EtsiTs102941Data &etsiTsdata,
 		EtsiTs103097Module::EtsiTs103097Data__Signed__My  &ret)
 {
@@ -780,12 +868,12 @@ ItsPkiWork::AtEnrollmentRequest_POP(ItsPkiInternalData &idata,
 
 
 bool
-ItsPkiWork::AtEnrollmentRequest_InnerAtRequest(ItsPkiInternalData &idata, OCTETSTRING &ret)
+ItsPkiSession::AtEnrollmentRequest_InnerAtRequest(ItsPkiInternalData &idata, OCTETSTRING &ret)
 {
 	DEBUGC_STREAM_CALLED;
 
 	if (!idata.CheckAtEnrollmentArguments())   {
-		ERROR_STREAMC << "ItsPkiWork::AtEnrollmentRequest_InnerAtRequest() invalid internal AT enrollment data" << std::endl;
+		ERROR_STREAMC << "ItsPkiSession::AtEnrollmentRequest_InnerAtRequest() invalid internal AT enrollment data" << std::endl;
 		return false;
 	}
 
@@ -925,7 +1013,7 @@ ItsPkiWork::AtEnrollmentRequest_InnerAtRequest(ItsPkiInternalData &idata, OCTETS
 
 
 bool
-ItsPkiWork::AtEnrollmentResponse_Status(OCTETSTRING &response_raw)
+ItsPkiSession::AtEnrollmentResponse_Status(OCTETSTRING &response_raw)
 {
 	DEBUGC_STREAM_CALLED;
 
@@ -954,7 +1042,7 @@ ItsPkiWork::AtEnrollmentResponse_Status(OCTETSTRING &response_raw)
 
 
 bool
-ItsPkiWork::AtEnrollmentResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING &ret_cert)
+ItsPkiSession::AtEnrollmentResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING &ret_cert)
 {
 	DEBUGC_STREAM_CALLED;
 
@@ -1008,7 +1096,7 @@ ItsPkiWork::AtEnrollmentResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING &r
 
 
 bool
-ItsPkiWork::AtEnrollmentResponse_SaveToFiles(ItsPkiInternalData &idata, OCTETSTRING &cert_encoded)
+ItsPkiSession::AtEnrollmentResponse_SaveToFiles(ItsPkiInternalData &idata, OCTETSTRING &cert_encoded)
 {
 	DEBUGC_STREAM_CALLED;
 

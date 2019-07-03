@@ -27,7 +27,7 @@
 
 #define ERROR_STREAMC std::cerr << STREAMC_LINE_HEADER 
 #define ERROR_STREAM std::cerr << STREAM_LINE_HEADER 
-#define CURL_STREAM std::cout
-#define REPORT_PRINT_RECORD
+// #define CURL_STREAM std::cout
+// #define REPORT_PRINT_RECORD
 
 #endif // ifndef ITS_PKI_DEBUG_HH

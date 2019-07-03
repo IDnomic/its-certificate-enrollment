@@ -1,5 +1,5 @@
-#ifndef ITS_PKI_WORK_HH
-#define ITS_PKI_WORK_HH
+#ifndef ITS_PKI_SESSION_HH
+#define ITS_PKI_SESSION_HH
 
 #include <fstream>
 #include <vector>
@@ -25,22 +25,28 @@ public:
         static void init()  { initialized = true; };
 };
 
-class ItsPkiWork {
+class ItsPkiSession {
 private:
-	std::string CLASS_NAME = std::string("ItsPkiWork");
+	std::string CLASS_NAME = std::string("ItsPkiSession");
 	ItsPkiEtsi etsiServices;
 	ItsPkiInternalData *idata = NULL;
+
+	void *sessionTechnicalKey = NULL;
 
 	bool GetIEEE1609dot2Signature(ItsPkiInternalData &, OCTETSTRING &, OCTETSTRING &, void *, IEEE1609dot2BaseTypes::Signature &);
 
 public:
-	void *work_data = NULL;
+	void *session_data = NULL;
 
-	ItsPkiWork(ItsPkiInternalData &);
-	~ItsPkiWork();
+	ItsPkiSession(ItsPkiInternalData &);
+	~ItsPkiSession();
 	const char *GetClassName() {return CLASS_NAME.c_str();};
 	const char *GetIdataClassName() {return idata ? idata->GetClassName() : NULL; };
 	
+	void *sessionGetTechnicalKey(ItsPkiInternalData &);
+	std::string sessionGetCanonicalId(ItsPkiInternalData &);
+	bool sessionCheckEcEnrollmentArguments(ItsPkiInternalData &);
+
 	ItsPkiInternalData *GetIData() { return idata;};
 	OCTETSTRING request_data;
 
@@ -72,4 +78,4 @@ public:
 };
 
 
-#endif // ifndef ITS_PKI_WORK_HH
+#endif // ifndef ITS_PKI_SESSION_HH

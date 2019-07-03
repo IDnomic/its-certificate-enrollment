@@ -10,7 +10,7 @@
 
 #include "its/itspki-debug.hh"
 #include "its/itspki-internal-data.hh"
-#include "its/itspki-work.hh"
+#include "its/itspki-session.hh"
 #include "its/utils.hh"
 
 #include "itspki-cmd-args.hh"
@@ -33,12 +33,12 @@ bool
 ItsRegisterRequest_Process(const std::string url, const std::string url_es,
 		ItsPkiInternalData &idata)
 {
-	ItsPkiWork work(idata);
+	ItsPkiSession session(idata);
 
         DEBUG_STREAM_CALLED;
 
         OCTETSTRING request;
-        if (!work.ItsRegisterRequest_Create(idata, request))  {
+        if (!session.ItsRegisterRequest_Create(idata, request))  {
                 ERROR_STREAM << "Cannot compose ItsRegister request" << std::endl;
                 return false;
         }
@@ -52,12 +52,12 @@ ItsRegisterRequest_Process(const std::string url, const std::string url_es,
 	dump_ttcn_object(response_raw, "its register response: ");
         
 	OCTETSTRING cert_encoded;
-        if (!work.ItsRegisterResponse_Parse(response_raw, cert_encoded))   {
+        if (!session.ItsRegisterResponse_Parse(response_raw, cert_encoded))   {
                 ERROR_STREAM << "cannot parse ItsRegister response" << std::endl;
                 return false;
         }
 
-        if (!work.ItsRegisterResponse_SaveToFiles(idata, cert_encoded))   {
+        if (!session.ItsRegisterResponse_SaveToFiles(idata, cert_encoded))   {
                 ERROR_STREAM << "Failed to save new ITS attributes to files" << std::endl;
                 return false;
         }
@@ -71,12 +71,12 @@ bool
 EcEnrollmentRequest_Process(const std::string url_ea, const std::string url_es,
 		ItsPkiInternalData &idata)
 {
-	ItsPkiWork work(idata);
+	ItsPkiSession session(idata);
 
         DEBUG_STREAM_CALLED;
 
         OCTETSTRING data_encrypted;
-        if (!work.EcEnrollmentRequest_Create(idata, data_encrypted))   {
+        if (!session.EcEnrollmentRequest_Create(idata, data_encrypted))   {
                 ERROR_STREAM << "Create EC enrollment request failed" << std::endl;
                 return false;
         }
@@ -88,12 +88,12 @@ EcEnrollmentRequest_Process(const std::string url_ea, const std::string url_es,
 	}
 
         OCTETSTRING cert_encoded;
-        if (!work.EcEnrollmentResponse_Parse(response_raw, cert_encoded))   {
+        if (!session.EcEnrollmentResponse_Parse(response_raw, cert_encoded))   {
                 ERROR_STREAM << "parse response error" << std::endl;
                 return false;
         }
 
-        if (!work.EcEnrollmentResponse_SaveToFiles(idata, cert_encoded))   {
+        if (!session.EcEnrollmentResponse_SaveToFiles(idata, cert_encoded))   {
                 ERROR_STREAM << "Failed to save ITS EC certificate and/or ITS EC private keys" << std::endl;
                 return false;
         }
@@ -114,9 +114,9 @@ pthread_mutex_t thread_parse_mutex = PTHREAD_MUTEX_INITIALIZER;
 void *
 ec_thread_handle(void *param)
 {
-        ItsPkiWork *work = (ItsPkiWork *)param;
+        ItsPkiSession *session = (ItsPkiSession *)param;
 
-	struct bench_data *b_data = (struct bench_data *) work->work_data;
+	struct bench_data *b_data = (struct bench_data *) session->session_data;
 	if (b_data == NULL || b_data->magic != BENCH_DATA_MAGIC)
 		return NULL;
 
@@ -124,7 +124,7 @@ ec_thread_handle(void *param)
         int thread_idx = ++thread_counter;
         pthread_mutex_unlock (&thread_counter_mutex);
 
-        ItsPkiInternalData *idata = work->GetIData();
+        ItsPkiInternalData *idata = session->GetIData();
         if (idata == NULL)   {
                 std::cout << "Invalid IData" << std::endl;
                 return NULL;
@@ -137,7 +137,7 @@ ec_thread_handle(void *param)
 
         for (int ii=0; ii < b_data->cycles_num; ii++)   {
                 OCTETSTRING response_raw;
-		if (!Curl_Send_ItsRequest(*(b_data->url), *(b_data->url_report), id, work->request_data, response_raw))   {
+		if (!Curl_Send_ItsRequest(*(b_data->url), *(b_data->url_report), id, session->request_data, response_raw))   {
                         pthread_mutex_lock(&thread_print_mutex);
                         std::cout  << "thread " << thread_idx << ": send request error" << std::endl;
                         pthread_mutex_unlock(&thread_print_mutex);
@@ -145,7 +145,7 @@ ec_thread_handle(void *param)
 		}
 
                 pthread_mutex_lock(&thread_parse_mutex);
-                bool res = work->EcEnrollmentResponse_Status(response_raw);
+                bool res = session->EcEnrollmentResponse_Status(response_raw);
                 pthread_mutex_unlock(&thread_parse_mutex);
                 if (!res)   {
                         pthread_mutex_lock(&thread_print_mutex);
@@ -167,9 +167,9 @@ EcEnrollmentRequest_Bench(const std::string url_ea, const std::string url_es,
 {
         pthread_t request_threads[40];
 
-	ItsPkiWork work(idata);
+	ItsPkiSession session(idata);
 	struct bench_data b_data = {&url_ea, &url_es, cycles_num, BENCH_DATA_MAGIC};
-	work.work_data = (void *)(&b_data);
+	session.session_data = (void *)(&b_data);
 
         if ((unsigned)threads_num > sizeof(request_threads)/sizeof(request_threads[0]))   {
                 threads_num = sizeof(request_threads)/sizeof(request_threads[0]);
@@ -181,15 +181,15 @@ EcEnrollmentRequest_Bench(const std::string url_ea, const std::string url_es,
         DEBUG_STREAM_CALLED;
 
         OCTETSTRING data_encrypted;
-        if (!work.EcEnrollmentRequest_Create(idata, data_encrypted))   {
+        if (!session.EcEnrollmentRequest_Create(idata, data_encrypted))   {
                 ERROR_STREAM << "Create EC enrollment request failed" << std::endl;
                 return false;
         }
 
-        work.request_data = data_encrypted;
+        session.request_data = data_encrypted;
         for (int exp_cntr = 0; exp_cntr < 1; exp_cntr++)   {
                 for (int ii = 0; ii < threads_num; ii++)   {
-                        if(pthread_create(&request_threads[ii], NULL, ec_thread_handle, &work)) {
+                        if(pthread_create(&request_threads[ii], NULL, ec_thread_handle, &session)) {
                                 fprintf(stderr, "Error creating thread %i\n", ii);
                                 return false;
                         }
@@ -216,12 +216,12 @@ bool
 AtEnrollmentRequest_Process(const std::string url_at, const std::string url_es,
 		ItsPkiInternalData &idata)
 {
-	ItsPkiWork work(idata);
+	ItsPkiSession session(idata);
 
         DEBUG_STREAM_CALLED;
 
         OCTETSTRING atRequest_encoded;
-        if (!work.AtEnrollmentRequest_InnerAtRequest(idata, atRequest_encoded))  {
+        if (!session.AtEnrollmentRequest_InnerAtRequest(idata, atRequest_encoded))  {
                 ERROR_STREAM << "Cannot compose AT request" << std::endl;
                 return false;
         }
@@ -233,12 +233,12 @@ AtEnrollmentRequest_Process(const std::string url_at, const std::string url_es,
 	}
         
 	OCTETSTRING cert_encoded;
-        if (!work.AtEnrollmentResponse_Parse(response_raw, cert_encoded))   {
+        if (!session.AtEnrollmentResponse_Parse(response_raw, cert_encoded))   {
                 ERROR_STREAM << "cannot parse At Enrollment response" << std::endl;
                 return false;
         }
 
-        if (!work.AtEnrollmentResponse_SaveToFiles(idata, cert_encoded))   {
+        if (!session.AtEnrollmentResponse_SaveToFiles(idata, cert_encoded))   {
                 ERROR_STREAM << "Failed to save ITS AT certificate or/and ITS AT keys" << std::endl;
                 return false;
         }
@@ -310,7 +310,7 @@ ParseEcEnrollmentCmdArguments(ItsPkiCmdArguments cmd_args, ItsPkiInternalData &i
 	}
 
 	// Create/Set ITS canonical ID
-	if (!idata.SetCanonicalID(cmd_args.its_canonical_id, cmd_args.its_name_header))   {
+	if (!idata.SetCanonicalID(cmd_args.its_canonical_id, cmd_args.its_name_header, idata.GetItsTechnicalKey()))   {
 		ERROR_STREAM << "EC enroll arguments: cannot set ITS canonical ID" << std::endl;
 		return false;
 	}
@@ -442,7 +442,7 @@ ParseAtEnrollmentCmdArguments(ItsPkiCmdArguments cmd_args, ItsPkiInternalData &i
 	}
 
 	// Create/Set ITS canonical ID
-	if (!idata.SetCanonicalID(cmd_args.its_canonical_id, cmd_args.its_name_header))   {
+	if (!idata.SetCanonicalID(cmd_args.its_canonical_id, cmd_args.its_name_header, idata.GetItsTechnicalKey()))   {
 		ERROR_STREAM << "AT enroll arguments: cannot set ITS canonical ID" << std::endl;
 		return false;
 	}
@@ -510,7 +510,7 @@ ParseItsRegisterCmdArguments(ItsPkiCmdArguments cmd_args, ItsPkiInternalData &id
 	}
 
 	// Create/Set ITS canonical ID
-	if (!idata.SetCanonicalID(cmd_args.its_canonical_id, cmd_args.its_name_header))   {
+	if (!idata.SetCanonicalID(cmd_args.its_canonical_id, cmd_args.its_name_header, idata.GetItsTechnicalKey()))   {
 		ERROR_STREAM << "EC enroll arguments: cannot set ITS canonical ID" << std::endl;
 		return false;
 	}

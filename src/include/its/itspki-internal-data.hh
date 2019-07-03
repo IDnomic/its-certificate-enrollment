@@ -37,13 +37,13 @@ public:
 private:
 	std::string CLASS_NAME = std::string("ItsPkiInternalData");
 	bool valid = false;
-	// std::string last_error_str;
 
 	unsigned char its_id[8];
 	std::string log_line_header;
 
 	unsigned char *ecid = NULL;
     	std::string its_canonical_id;
+    	std::string its_name_header;
 	std::string profile;
 	
 	struct PsidSsp psid_ssp;
@@ -53,6 +53,7 @@ private:
 	int validityrestrictions_len;
 	
     	void *technicalKey = NULL;
+	bool itsNeedRegistration = false;
 
 	OCTETSTRING itsEcCert_blob;
 	OCTETSTRING itsEcId;
@@ -109,7 +110,10 @@ public:
 	~ItsPkiInternalData();
 	const char *GetClassName() {return CLASS_NAME.c_str();};
 	
-	bool SetCanonicalID(const std::string &, const std::string &);
+	bool SetItsNameHeader(const std::string &);
+	std::string GetItsNameHeader() { return its_name_header; };
+
+	bool SetCanonicalID(const std::string &, const std::string &, void *);
 	std::string GetCanonicalId() { return its_canonical_id; };
 
 	bool SetProfile(const std::string &_profile) {profile = _profile; return true;};
@@ -126,8 +130,8 @@ public:
 	IEEE1609dot2BaseTypes::HashAlgorithm::enum_type &GetHashAlgorithm() { return hash_algorithm; };
 
 	bool SetItsTechnicalKey(void *key) {
-		technicalKey = key; 
-		return technicalKey == NULL ? false : true;
+		technicalKey = key;
+		return (key != NULL);
 	};
 	void *GetItsTechnicalKey() {
 		return technicalKey;
@@ -221,6 +225,9 @@ public:
 		return itsAtEncryptionKeySave2File;
 	};
 
+	bool IsItsRegistrationNeeded() { return itsNeedRegistration; };
+	void SetItsRegistrationFlag(bool needed) { itsNeedRegistration = needed; };
+	
 	bool CheckItsRegisterData();
 	bool CheckEcEnrollmentArguments();
 	bool CheckAtEnrollmentArguments();
