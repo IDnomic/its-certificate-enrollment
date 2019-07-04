@@ -80,8 +80,6 @@ ItsPkiInternalData::SetCanonicalID(const std::string &id, const std::string &nm_
 
 ItsPkiInternalData::~ItsPkiInternalData()
 {
-	DEBUGC_STREAM_CALLED;
-	
 	ECKey_Free(technicalKey);
 	ECKey_Free(itsEcVerificationKey);
 	ECKey_Free(itsEcEncryptionKey);

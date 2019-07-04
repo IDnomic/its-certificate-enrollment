@@ -432,6 +432,8 @@ ItsPkiEtsi::ItsPkiPrivateKey::generate(int in_nid)
 {
 	DEBUGC_STREAM_CALLED;
 
+	if (ec_key != NULL)
+		ECKey_Free(ec_key);
 	if (!ECKey_NewKey(in_nid, (void **)(&ec_key), prvkey_oct, pubkey.x, pubkey.y, pubkey.comp_key, pubkey.comp_key_mode))   {
 		ERROR_STREAMC << "failed to generate new EC key" << std::endl;
 		return false;
