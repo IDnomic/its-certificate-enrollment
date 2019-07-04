@@ -32,7 +32,18 @@ private:
 	ItsPkiInternalData *idata = NULL;
 
 	void *sessionTechnicalKey = NULL;
+	void *sessionItsEcVerificationKey = NULL;
+	void *sessionItsEcEncryptionKey = NULL;
+	void *sessionItsAtVerificationKey = NULL;
+	void *sessionItsAtEncryptionKey = NULL;
 	std::string its_id;
+
+	bool GetPublicVerificationKey(void *, IEEE1609dot2BaseTypes::PublicVerificationKey &);
+	bool GetPublicEncryptionKey(void *, IEEE1609dot2BaseTypes::PublicEncryptionKey &);
+	bool GetItsEcPublicVerificationKey(IEEE1609dot2BaseTypes::PublicVerificationKey &);
+	bool GetItsEcPublicEncryptionKey(IEEE1609dot2BaseTypes::PublicEncryptionKey &);
+	bool GetItsAtPublicVerificationKey(IEEE1609dot2BaseTypes::PublicVerificationKey &);
+	bool GetItsAtPublicEncryptionKey(IEEE1609dot2BaseTypes::PublicEncryptionKey &);
 
 	bool GetIEEE1609dot2Signature(ItsPkiInternalData &, OCTETSTRING &, OCTETSTRING &, void *, IEEE1609dot2BaseTypes::Signature &);
 
@@ -44,7 +55,12 @@ public:
 	const char *GetClassName() {return CLASS_NAME.c_str();};
 	const char *GetIdataClassName() {return idata ? idata->GetClassName() : NULL; };
 	
-	void *sessionGetTechnicalKey(ItsPkiInternalData &);
+	void *sessionGetTechnicalKey();
+	void *sessionGetItsEcVerificationKey();
+	void *sessionGetItsEcEncryptionKey();
+	void *sessionGetItsAtVerificationKey();
+	void *sessionGetItsAtEncryptionKey();
+
 	std::string sessionGetCanonicalId(ItsPkiInternalData &);
 	std::string sessionGetItsID() { return its_id; };
 	bool sessionCheckEcEnrollmentArguments(ItsPkiInternalData &);

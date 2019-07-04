@@ -273,10 +273,7 @@ ParseEcEnrollmentCmdArguments(ItsPkiCmdArguments cmd_args, ItsPkiInternalData &i
 			key = ECKey_ReadPrivateKeyB64(cmd_args.its_ec_ekey_b64.c_str()); 
 		else 
 			key = ECKey_GeneratePrivateKey();
-		if (!idata.SetItsEcEncryptionKey(key))   {
-			ERROR_STREAM << "EC enroll: cannot read from file, base64 string or generate the EC encryption key "<< std::endl;
-			return false;
-		}
+		idata.SetItsEcEncryptionKey(key);
 	}
 
 	// ITS Ec Verification Key
@@ -287,10 +284,7 @@ ParseEcEnrollmentCmdArguments(ItsPkiCmdArguments cmd_args, ItsPkiInternalData &i
 		key = ECKey_ReadPrivateKeyB64(cmd_args.its_ec_vkey_b64.c_str()); 
 	else
 		key = ECKey_GeneratePrivateKey();
-	if (!idata.SetItsEcVerificationKey(key))   {
-		ERROR_STREAM << "EC enroll: cannot read from file, base64 string or generate the EC verification key "<< std::endl;
-		return false;
-	}
+	idata.SetItsEcVerificationKey(key);
 
 	// Parse EA certificate
 	OCTETSTRING blob;
@@ -436,10 +430,7 @@ ParseAtEnrollmentCmdArguments(ItsPkiCmdArguments cmd_args, ItsPkiInternalData &i
 		key = ECKey_ReadPrivateKey(cmd_args.its_ec_vkey.c_str()); 
 	else if (!cmd_args.its_ec_vkey_b64.empty())
 		key = ECKey_ReadPrivateKeyB64(cmd_args.its_ec_vkey_b64.c_str()); 
-	if (!idata.SetItsEcVerificationKey(key))   {
-		ERROR_STREAM << "AT enroll: cannot set ITS EC verification key "<< std::endl;
-		return false;
-	}
+	idata.SetItsEcVerificationKey(key);
 
 	// Create/Set ITS canonical ID
 	if (!idata.SetCanonicalID(cmd_args.its_canonical_id, cmd_args.its_name_header, idata.GetItsTechnicalKey()))   {

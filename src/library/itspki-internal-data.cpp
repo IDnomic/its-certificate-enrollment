@@ -167,114 +167,6 @@ ItsPkiInternalData::CheckAidSsp()
 	return true;
 }
 
-bool
-ItsPkiInternalData::GetPublicVerificationKey(void *ec_key, IEEE1609dot2BaseTypes::PublicVerificationKey &pubkey)
-{
-	int nid = -1;
-	OCTETSTRING x, y;
-
-	DEBUGC_STREAM_CALLED;
-	if (!ECKey_GetPublicKeyComponents(ec_key, nid, x, y))   {
-		ERROR_STREAMC << "something wrong with EC PublicKey components" << std::endl;
-		return false;
-	}
-
-	if (nid == NID_X9_62_prime256v1)   {
-		IEEE1609dot2BaseTypes::EccP256CurvePoint ec_point;
-		ec_point.uncompressedP256().x() = x;
-		ec_point.uncompressedP256().y() = y;
-		pubkey.ecdsaNistP256() = ec_point;
-	}
-	else if (nid == NID_brainpoolP256r1)   {
-		IEEE1609dot2BaseTypes::EccP256CurvePoint ec_point;
-		ec_point.uncompressedP256().x() = x;
-		ec_point.uncompressedP256().y() = y;
-		pubkey.ecdsaBrainpoolP256r1() = ec_point;
-	}
-	else if (nid == NID_brainpoolP384r1)   {
-		IEEE1609dot2BaseTypes::EccP384CurvePoint ec_point;
-		ec_point.uncompressedP384().x() = x;
-		ec_point.uncompressedP384().y() = y;
-		pubkey.ecdsaBrainpoolP384r1() = ec_point;
-	}
-	else    {
-		ERROR_STREAMC << "no support for EC curve '" << OBJ_nid2sn(nid) << "'" << std::endl;
-		return false;
-	}
-
-	DEBUGC_STREAM_RETURNS_OK;
-	return true;
-}
-
-
-bool
-ItsPkiInternalData::GetItsEcPublicVerificationKey(IEEE1609dot2BaseTypes::PublicVerificationKey &pubkey)
-{
-	DEBUGC_STREAM_CALLED;
-	return GetPublicVerificationKey(itsEcVerificationKey, pubkey);
-}
-
-
-bool
-ItsPkiInternalData::GetItsAtPublicVerificationKey(IEEE1609dot2BaseTypes::PublicVerificationKey &pubkey)
-{
-	DEBUGC_STREAM_CALLED;
-	return GetPublicVerificationKey(itsAtVerificationKey, pubkey);
-}
-
-
-bool
-ItsPkiInternalData::GetPublicEncryptionKey(void *ec_key, IEEE1609dot2BaseTypes::PublicEncryptionKey &pubkey)
-{
-	int nid = -1;
-	OCTETSTRING x, y;
-
-	DEBUGC_STREAM_CALLED;
-	
-	if (!ECKey_GetPublicKeyComponents(ec_key, nid, x, y))   {
-		ERROR_STREAMC << "something wrong with EC PublicKey components" << std::endl;
-		return false;
-	}
-
-	if (nid == NID_X9_62_prime256v1)   {
-		IEEE1609dot2BaseTypes::EccP256CurvePoint ec_point;
-		ec_point.uncompressedP256().x() = x;
-		ec_point.uncompressedP256().y() = y;
-		pubkey.publicKey().eciesNistP256() = ec_point;
-	}
-	else if (nid == NID_brainpoolP256r1)   {
-		IEEE1609dot2BaseTypes::EccP256CurvePoint ec_point;
-		ec_point.uncompressedP256().x() = x;
-		ec_point.uncompressedP256().y() = y;
-		pubkey.publicKey().eciesBrainpoolP256r1() = ec_point;
-	}
-	else    {
-		ERROR_STREAMC << "unexpected EC curve: " << OBJ_nid2sn(nid) << std::endl;
-		return false;
-	}
-
-	pubkey.supportedSymmAlg() = IEEE1609dot2BaseTypes::SymmAlgorithm::aes128Ccm;
-
-	DEBUGC_STREAM_RETURNS_OK;
-	return true;
-}
-
-
-bool
-ItsPkiInternalData::GetItsEcPublicEncryptionKey(IEEE1609dot2BaseTypes::PublicEncryptionKey &pubkey)
-{
-	DEBUGC_STREAM_CALLED;
-	return GetPublicEncryptionKey(itsEcEncryptionKey, pubkey);
-}
-
-
-bool
-ItsPkiInternalData::GetItsAtPublicEncryptionKey(IEEE1609dot2BaseTypes::PublicEncryptionKey &pubkey)
-{
-	DEBUGC_STREAM_CALLED;
-	return GetPublicEncryptionKey(itsAtEncryptionKey, pubkey);
-}
-
 
 bool
 ItsPkiInternalData::IEEE1609dot2_Sign(OCTETSTRING &data, OCTETSTRING &signer,
@@ -626,7 +518,6 @@ ItsPkiInternalData::CheckEcEnrollmentArguments()
 		ERROR_STREAMC << "EC enroll: ITS canonical ID do not set" << std::endl;
 		return false;
 	}
-#endif
 	if (itsEcEncryptionKeyEnable)   {
 		if (itsEcEncryptionKey == NULL)   {
 			ERROR_STREAMC << "EC enroll: cannot read from file, base64 string or generate the EC encryption key "<< std::endl;
@@ -637,6 +528,7 @@ ItsPkiInternalData::CheckEcEnrollmentArguments()
 		ERROR_STREAMC << "EC enroll: cannot read from file, base64 string or generate the EC verification key "<< std::endl;
 		return false;
 	}
+#endif
 	if (!CheckEnrollmentDataEA())   {
 		ERROR_STREAMC << "EC enroll: invalid EA parameters" << std::endl;
 		return false;

@@ -57,7 +57,9 @@ private:
 
 	OCTETSTRING itsEcCert_blob;
 	OCTETSTRING itsEcId;
+
 	void *itsEcVerificationKey = NULL;
+
 	void *itsEcEncryptionKey = NULL;
 	bool itsEcEncryptionKeyEnable = false;
 
@@ -99,8 +101,6 @@ private:
 
 	bool setEncryptionKey(OCTETSTRING &, void **);
 	bool getCertId(OCTETSTRING &, OCTETSTRING &);
-	bool GetPublicVerificationKey(void *, IEEE1609dot2BaseTypes::PublicVerificationKey &);
-	bool GetPublicEncryptionKey(void *, IEEE1609dot2BaseTypes::PublicEncryptionKey &);
 
 	bool CheckEnrollmentDataEA();
 	bool CheckEnrollmentDataAA();
@@ -137,22 +137,26 @@ public:
 		return technicalKey;
 	};
 
-	bool SetItsEcVerificationKey(void *key) {
+	void SetItsEcVerificationKey(void *key) {
 		itsEcVerificationKey = key;
-		return ((key == NULL) ? false : true);
 	};
 	void *GetItsEcVerificationKey() {
 		return itsEcVerificationKey;
 	};
 	
-	bool SetItsEcEncryptionKey(void *key) {
+	void SetItsEcEncryptionKey(void *key) {
 		itsEcEncryptionKey = key;
-		itsEcEncryptionKeyEnable = ((key == NULL) ? false : true);
-		return itsEcEncryptionKeyEnable;
+		if (key != NULL) itsEcEncryptionKeyEnable = true;
 	};
+	void SetItsEcEncryptionKeyEnable(bool enable) {
+		itsEcEncryptionKeyEnable = enable;
+	}
 	void *GetItsEcEncryptionKey() {
 		return (itsEcEncryptionKeyEnable ? itsEcEncryptionKey : NULL);
 	};
+	bool IsItsEcEncryptionKeyEnabled() {
+		return itsEcEncryptionKeyEnable;
+	}
 
 	bool SetEAEncryptionKey(OCTETSTRING &);
 
@@ -233,11 +237,6 @@ public:
 	bool CheckAtEnrollmentArguments();
 
 	bool IEEE1609dot2_Sign(OCTETSTRING &, OCTETSTRING &, void *, OCTETSTRING &, OCTETSTRING &);
-
-	bool GetItsEcPublicVerificationKey(IEEE1609dot2BaseTypes::PublicVerificationKey &);
-	bool GetItsAtPublicVerificationKey(IEEE1609dot2BaseTypes::PublicVerificationKey &);
-	bool GetItsEcPublicEncryptionKey(IEEE1609dot2BaseTypes::PublicEncryptionKey &);
-	bool GetItsAtPublicEncryptionKey(IEEE1609dot2BaseTypes::PublicEncryptionKey &);
 
 	OCTETSTRING &GetEAId() {
 		return eaId;

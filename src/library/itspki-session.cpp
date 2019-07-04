@@ -42,6 +42,147 @@ ItsPkiSession::~ItsPkiSession()
 
 
 bool
+ItsPkiSession::GetPublicVerificationKey(void *ec_key, IEEE1609dot2BaseTypes::PublicVerificationKey &pubkey)
+{
+        int nid = -1;
+        OCTETSTRING x, y;
+
+        DEBUGC_STREAM_CALLED;
+        if (!ECKey_GetPublicKeyComponents(ec_key, nid, x, y))   {
+                ERROR_STREAMC << "something wrong with EC PublicKey components" << std::endl;
+                return false;
+        }
+
+        if (nid == NID_X9_62_prime256v1)   {
+                IEEE1609dot2BaseTypes::EccP256CurvePoint ec_point;
+                ec_point.uncompressedP256().x() = x;
+                ec_point.uncompressedP256().y() = y;
+                pubkey.ecdsaNistP256() = ec_point;
+        }
+        else if (nid == NID_brainpoolP256r1)   {
+                IEEE1609dot2BaseTypes::EccP256CurvePoint ec_point;
+                ec_point.uncompressedP256().x() = x;
+                ec_point.uncompressedP256().y() = y;
+                pubkey.ecdsaBrainpoolP256r1() = ec_point;
+        }
+        else if (nid == NID_brainpoolP384r1)   {
+                IEEE1609dot2BaseTypes::EccP384CurvePoint ec_point;
+                ec_point.uncompressedP384().x() = x;
+                ec_point.uncompressedP384().y() = y;
+                pubkey.ecdsaBrainpoolP384r1() = ec_point;
+        }
+        else    {
+                ERROR_STREAMC << "no support for EC curve '" << OBJ_nid2sn(nid) << "'" << std::endl;
+                return false;
+        }
+
+        DEBUGC_STREAM_RETURNS_OK;
+        return true;
+}
+
+
+bool
+ItsPkiSession::GetItsEcPublicVerificationKey(IEEE1609dot2BaseTypes::PublicVerificationKey &pubkey)
+{
+	if (idata == NULL)
+		return false;
+	void *key = idata->GetItsEcVerificationKey();
+	if (key == NULL)
+		key = sessionItsEcVerificationKey;
+	if (key == NULL)
+		return false;
+
+        return GetPublicVerificationKey(key, pubkey);
+}
+
+
+bool
+ItsPkiSession::GetItsAtPublicVerificationKey(IEEE1609dot2BaseTypes::PublicVerificationKey &pubkey)
+{
+        DEBUGC_STREAM_CALLED;
+
+	if (idata == NULL)
+		return false;
+	void *key = idata->GetItsAtVerificationKey();
+	if (key == NULL)
+		key = sessionItsAtVerificationKey;
+	if (key == NULL)
+		return false;
+
+        return GetPublicVerificationKey(key, pubkey);
+}
+
+
+bool
+ItsPkiSession::GetPublicEncryptionKey(void *ec_key, IEEE1609dot2BaseTypes::PublicEncryptionKey &pubkey)
+{
+        int nid = -1;
+        OCTETSTRING x, y;
+
+        DEBUGC_STREAM_CALLED;
+
+        if (!ECKey_GetPublicKeyComponents(ec_key, nid, x, y))   {
+                ERROR_STREAMC << "something wrong with EC PublicKey components" << std::endl;
+                return false;
+        }
+
+        if (nid == NID_X9_62_prime256v1)   {
+                IEEE1609dot2BaseTypes::EccP256CurvePoint ec_point;
+                ec_point.uncompressedP256().x() = x;
+                ec_point.uncompressedP256().y() = y;
+                pubkey.publicKey().eciesNistP256() = ec_point;
+        }
+        else if (nid == NID_brainpoolP256r1)   {
+                IEEE1609dot2BaseTypes::EccP256CurvePoint ec_point;
+                ec_point.uncompressedP256().x() = x;
+                ec_point.uncompressedP256().y() = y;
+                pubkey.publicKey().eciesBrainpoolP256r1() = ec_point;
+        }
+        else    {
+                ERROR_STREAMC << "unexpected EC curve: " << OBJ_nid2sn(nid) << std::endl;
+                return false;
+        }
+
+        pubkey.supportedSymmAlg() = IEEE1609dot2BaseTypes::SymmAlgorithm::aes128Ccm;
+
+        DEBUGC_STREAM_RETURNS_OK;
+        return true;
+}
+
+
+bool
+ItsPkiSession::GetItsEcPublicEncryptionKey(IEEE1609dot2BaseTypes::PublicEncryptionKey &pubkey)
+{
+	if (idata == NULL)
+		return false;
+	void *key = idata->GetItsEcEncryptionKey();
+	if (key == NULL)
+		key = sessionItsEcEncryptionKey;
+	if (key == NULL)
+		return false;
+
+        return GetPublicEncryptionKey(key, pubkey);
+}
+
+
+bool
+ItsPkiSession::GetItsAtPublicEncryptionKey(IEEE1609dot2BaseTypes::PublicEncryptionKey &pubkey)
+{
+        DEBUGC_STREAM_CALLED;
+
+	if (idata == NULL)
+		return false;
+	void *key = idata->GetItsAtEncryptionKey();
+	if (key == NULL)
+		key = sessionItsAtEncryptionKey;
+	if (key == NULL)
+		return false;
+
+        return GetPublicEncryptionKey(key, pubkey);
+}
+
+
+bool
 ItsPkiSession::GetIEEE1609dot2Signature(ItsPkiInternalData &idata, OCTETSTRING &data, OCTETSTRING &signer, void *key,
 		IEEE1609dot2BaseTypes::Signature &out_signature)
 {
@@ -115,7 +256,6 @@ ItsPkiSession::ItsRegisterRequest_Create(ItsPkiInternalData &idata, OCTETSTRING 
         }
 	
 	void *t_key = idata.GetItsTechnicalKey();
-
 	if (t_key == NULL)   {
 		if (sessionTechnicalKey == NULL)
 			sessionTechnicalKey = ECKey_GeneratePrivateKey(); 
@@ -191,7 +331,7 @@ ItsPkiSession::sessionGetCanonicalId(ItsPkiInternalData &idata)
 	if (!ret.empty())
 		return ret;
 
-	void *key = sessionGetTechnicalKey(idata);
+	void *key = sessionGetTechnicalKey();
 	if (key == NULL)   {
 		ERROR_STREAMC << "failed: no ITS Technical Key" << std::endl;
 		return ret;
@@ -255,7 +395,7 @@ ItsPkiSession::EcEnrollmentRequest_InnerEcRequest(ItsPkiInternalData &idata, Ets
 
 	// verificationKey := { ecdsaNistP256 := { uncompressedP256 := { x := ''O, y := ''O } } },
 	IEEE1609dot2BaseTypes::PublicVerificationKey verif_pubkey;
-	if (!idata.GetItsEcPublicVerificationKey(verif_pubkey))   {
+	if (!GetPublicVerificationKey(sessionGetItsEcVerificationKey(), verif_pubkey))   {
 		ERROR_STREAMC << "cannot get Ec PublicVerificationKey: " << std::endl;
 		return false;
 	}
@@ -263,9 +403,9 @@ ItsPkiSession::EcEnrollmentRequest_InnerEcRequest(ItsPkiInternalData &idata, Ets
 	EtsiTs102941BaseTypes::PublicKeys pubkeys = EtsiTs102941BaseTypes::PublicKeys(verif_pubkey, OMIT_VALUE);
 
 	// encryptionKey := { supportedSymmAlg := aes128Ccm (0), publicKey := { eciesNistP256 := { uncompressedP256 := { x := ''O, y := ''O } } } }
-	if (idata.GetItsEcEncryptionKey() != NULL)   {
+	if (sessionGetItsEcEncryptionKey() != NULL)   {
 		IEEE1609dot2BaseTypes::PublicEncryptionKey encryption_pubkey;
-		if (!idata.GetItsEcPublicEncryptionKey(encryption_pubkey))   {
+		if (!GetPublicEncryptionKey(sessionGetItsEcEncryptionKey(), encryption_pubkey))   {
 			ERROR_STREAMC << "cannot get Ec PublicEncryptionKey: " << std::endl;
 			return false;
 		}
@@ -348,7 +488,7 @@ ItsPkiSession::EcEnrollmentRequest_InnerData(ItsPkiInternalData &idata,
 
 	// signature_ := { ecdsaNistP256Signature := { rSig := { x_only := ''O }, sSig := ''O } }
 	IEEE1609dot2BaseTypes::Signature signature;
-	if (!GetIEEE1609dot2Signature(idata, tbs_encoded, idata.GetItsEcCertBlob(), idata.GetItsEcVerificationKey(), signature))   {
+	if (!GetIEEE1609dot2Signature(idata, tbs_encoded, idata.GetItsEcCertBlob(), sessionGetItsEcVerificationKey(), signature))   {
 		ERROR_STREAMC << "signing failed" << std::endl;
 		return false;
 	}
@@ -564,16 +704,66 @@ ItsPkiSession::EcEnrollmentResponse_Status(OCTETSTRING &response_raw)
 
 
 void *
-ItsPkiSession::sessionGetTechnicalKey(ItsPkiInternalData &idata)
+ItsPkiSession::sessionGetTechnicalKey()
 {
-	DEBUGC_STREAM_CALLED;
+	if (idata == NULL)
+		return NULL;
 
-	void *key = idata.GetItsTechnicalKey();
-	if (key == NULL)
-		key = sessionTechnicalKey;
+	if (idata->GetItsTechnicalKey() != NULL)
+		return idata->GetItsTechnicalKey();
 
-	DEBUGC_STREAM_RETURNS_OK;
-	return key; 
+	return sessionTechnicalKey;
+}
+
+
+void *
+ItsPkiSession::sessionGetItsEcVerificationKey()
+{
+	if (idata == NULL)
+		return NULL;
+
+	if (idata->GetItsEcVerificationKey() != NULL)
+		return idata->GetItsEcVerificationKey();
+
+	return sessionItsEcVerificationKey;
+}
+
+
+void *
+ItsPkiSession::sessionGetItsEcEncryptionKey()
+{
+	if (idata == NULL)
+		return NULL;
+
+	if (idata->GetItsEcEncryptionKey() != NULL)
+		return idata->GetItsEcEncryptionKey();
+
+	return sessionItsEcEncryptionKey;
+}
+
+
+void *
+ItsPkiSession::sessionGetItsAtVerificationKey()
+{
+	if (idata == NULL)
+		return NULL;
+
+	if (idata->GetItsAtVerificationKey() != NULL)
+		return idata->GetItsAtVerificationKey();
+
+	return sessionItsAtVerificationKey;
+}
+
+
+void *
+ItsPkiSession::sessionGetItsAtEncryptionKey()
+{
+	if (idata == NULL)
+		return NULL;
+
+	if (idata->GetItsAtEncryptionKey() != NULL)
+		return idata->GetItsAtEncryptionKey();
+	return sessionItsAtEncryptionKey;
 }
 
 
@@ -582,14 +772,30 @@ ItsPkiSession::sessionCheckEcEnrollmentArguments(ItsPkiInternalData &idata)
 {
 	DEBUGC_STREAM_CALLED;
 
+	if (sessionGetTechnicalKey() == NULL)   {
+		ERROR_STREAMC << "ItsPkiSession::EcEnrollmentRequest_Create() no ITS Technical Key" << std::endl;
+		return false;
+	}
+
 	if (!idata.CheckEcEnrollmentArguments())   {
 		ERROR_STREAMC << "ItsPkiSession::EcEnrollmentRequest_Create() invalid internal EC enrollment request data" << std::endl;
 		return false;
 	}
 
-	if (sessionGetTechnicalKey(idata) == NULL)   {
-		ERROR_STREAMC << "ItsPkiSession::EcEnrollmentRequest_Create() no ITS Technical Key" << std::endl;
-		return false;
+	if ((sessionItsEcVerificationKey == NULL) && (idata.GetItsEcVerificationKey() == NULL))   {
+		sessionItsEcVerificationKey = ECKey_GeneratePrivateKey(); 
+		if (sessionItsEcVerificationKey == NULL)   {
+			ERROR_STREAMC << "ItsPkiSession::EcEnrollmentRequest_Create() cannot generaete EC Verification key" << std::endl;
+			return false;
+		}
+	}
+
+	if ((sessionItsEcEncryptionKey == NULL) && (idata.GetItsEcEncryptionKey() == NULL) && idata.IsItsEcEncryptionKeyEnabled())   {
+		sessionItsEcEncryptionKey = ECKey_GeneratePrivateKey();
+       		if (sessionItsEcEncryptionKey == NULL)   {	
+			ERROR_STREAMC << "ItsPkiSession::EcEnrollmentRequest_Create() cannot generaete EC Encryption key" << std::endl;
+			return false;
+		}
 	}
 
 	if (sessionGetCanonicalId(idata).empty())   {
@@ -667,7 +873,7 @@ ItsPkiSession::EcEnrollmentRequest_Create(ItsPkiInternalData &idata, OCTETSTRING
 
 	IEEE1609dot2BaseTypes::Signature signature;
 	OCTETSTRING signer = OCTETSTRING(0, NULL);
-	if (!GetIEEE1609dot2Signature(idata, tbs_encoded, signer, sessionGetTechnicalKey(idata), signature))   {
+	if (!GetIEEE1609dot2Signature(idata, tbs_encoded, signer, sessionGetTechnicalKey(), signature))   {
 		ERROR_STREAMC << "failed to sign" << std::endl;
 		return false;
 	}
@@ -716,7 +922,7 @@ ItsPkiSession::EcEnrollmentResponse_SaveToFiles(ItsPkiInternalData &idata, OCTET
 
 	save2file = idata.GetItsEcVerificationKeySave2File();
 	if (!save2file.empty())   {
-		if (!ECKey_PrivateKeyToFile(idata.GetItsEcVerificationKey(), save2file.c_str()))   {
+		if (!ECKey_PrivateKeyToFile(sessionGetItsEcVerificationKey(), save2file.c_str()))   {
         		ERROR_STREAMC << "cannot store ITS EC verification key to file '" << save2file << "'" << std::endl;
 			return false;
 		}
@@ -724,7 +930,7 @@ ItsPkiSession::EcEnrollmentResponse_SaveToFiles(ItsPkiInternalData &idata, OCTET
 
 	save2file = idata.GetItsEcEncryptionKeySave2File();
 	if (!save2file.empty())   {
-		if (!ECKey_PrivateKeyToFile(idata.GetItsEcEncryptionKey(), save2file.c_str()))   {
+		if (!ECKey_PrivateKeyToFile(sessionGetItsEcEncryptionKey(), save2file.c_str()))   {
         		ERROR_STREAMC << "cannot store ITS EC encryption key to file '" << save2file << "'" << std::endl;
 			return false;
 		}
@@ -795,7 +1001,7 @@ ItsPkiSession::AtEnrollmentRequest_SignedExternalPayload(ItsPkiInternalData &ida
 	signer_id.digest() = idata.GetItsEcId();
 
 	IEEE1609dot2BaseTypes::Signature signature;
-	if (!GetIEEE1609dot2Signature(idata, tbs_encoded, idata.GetItsEcCertBlob(), idata.GetItsEcVerificationKey(), signature))   {
+	if (!GetIEEE1609dot2Signature(idata, tbs_encoded, idata.GetItsEcCertBlob(), sessionGetItsEcVerificationKey(), signature))   {
 		ERROR_STREAMC << "failed to sign" << std::endl;
 		return false;
 	}
@@ -888,7 +1094,7 @@ ItsPkiSession::AtEnrollmentRequest_InnerAtRequest(ItsPkiInternalData &idata, OCT
 	}
 
 	IEEE1609dot2BaseTypes::PublicVerificationKey v_pubkey;
-        if (!idata.GetItsAtPublicVerificationKey(v_pubkey))   {
+        if (!GetItsAtPublicVerificationKey(v_pubkey))   {
 		ERROR_STREAMC << "cannot get ITS AT PublicVerificationKey" << std::endl;
 		return false;
 	}
@@ -901,8 +1107,8 @@ ItsPkiSession::AtEnrollmentRequest_InnerAtRequest(ItsPkiInternalData &idata, OCT
 
 	IEEE1609dot2BaseTypes::PublicEncryptionKey e_pubkey;
 	OCTETSTRING e_pubkey_encoded = OCTETSTRING(0, NULL);
-	if(idata.GetItsAtEncryptionKey() != NULL)   {
-		if (!idata.GetItsAtPublicEncryptionKey(e_pubkey))   {
+	if(sessionGetItsAtEncryptionKey() != NULL)   {
+		if (!GetItsAtPublicEncryptionKey(e_pubkey))   {
 			ERROR_STREAMC << "cannot get ITS AT PublicEncryptionKey" << std::endl;
 			return false;
 		}
