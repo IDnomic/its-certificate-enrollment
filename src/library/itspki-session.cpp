@@ -37,6 +37,10 @@ ItsPkiSession::ItsPkiSession(ItsPkiInternalData &_idata)
 ItsPkiSession::~ItsPkiSession()
 {
         ECKey_Free(sessionTechnicalKey);
+        ECKey_Free(sessionItsEcVerificationKey);
+        ECKey_Free(sessionItsEcEncryptionKey);
+        ECKey_Free(sessionItsAtVerificationKey);
+        ECKey_Free(sessionItsAtEncryptionKey);
 	OpenSSL_cleanup();
 }
 
