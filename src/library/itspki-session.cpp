@@ -186,6 +186,24 @@ ItsPkiSession::GetItsAtPublicEncryptionKey(IEEE1609dot2BaseTypes::PublicEncrypti
 }
 
 
+OCTETSTRING &
+ItsPkiSession::sessionGetItsEcCert()
+{
+	if (idata != NULL && idata->GetItsEcCertBlob().is_bound())
+		return idata->GetItsEcCertBlob();
+	return sessionItsEcCert;
+};
+
+
+OCTETSTRING &
+ItsPkiSession::sessionGetItsEcId()
+{
+	if (idata != NULL && idata->GetItsEcId().is_bound())
+		return idata->GetItsEcId();
+	return sessionItsEcId;
+};
+
+
 bool
 ItsPkiSession::GetIEEE1609dot2Signature(ItsPkiInternalData &idata, OCTETSTRING &data, OCTETSTRING &signer, void *key,
 		IEEE1609dot2BaseTypes::Signature &out_signature)
@@ -492,7 +510,7 @@ ItsPkiSession::EcEnrollmentRequest_InnerData(ItsPkiInternalData &idata,
 
 	// signature_ := { ecdsaNistP256Signature := { rSig := { x_only := ''O }, sSig := ''O } }
 	IEEE1609dot2BaseTypes::Signature signature;
-	if (!GetIEEE1609dot2Signature(idata, tbs_encoded, idata.GetItsEcCertBlob(), sessionGetItsEcVerificationKey(), signature))   {
+	if (!GetIEEE1609dot2Signature(idata, tbs_encoded, sessionGetItsEcCert(), sessionGetItsEcVerificationKey(), signature))   {
 		ERROR_STREAMC << "signing failed" << std::endl;
 		return false;
 	}
@@ -635,6 +653,7 @@ ItsPkiSession::EcEnrollmentResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING
 	DEBUGC_STREAM_CALLED;
 
 	OCTETSTRING payload;
+	std::cout << __LINE__ << ": EcEnrollmentResponse_Parse()" << std::endl;
 	if (!etsiServices.DecryptPayload(response_raw, payload))   {
                 ERROR_STREAMC << "decrypt payload failed" << std::endl;
                 return false;
@@ -668,11 +687,19 @@ ItsPkiSession::EcEnrollmentResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING
 	EtsiTs103097Module::EtsiTs103097Certificate cert = response_inner_data.content().enrolmentResponse().certificate();
 	dump_ttcn_object(cert, "ITS EC Certificate: ");
 	
-	if (!encEtsiTs103097Certificate(cert, ret_cert))    {
+	if (!encEtsiTs103097Certificate(cert, sessionItsEcCert))    {
         	ERROR_STREAMC << "cannot encode EtsiTs103097Certificate" << std::endl;
 		return false;
 	}
-	dump_ttcn_object(ret_cert, "ITS EC Certificate (encoded): ");
+
+	if (!getEtsiTs103097CertId(sessionItsEcCert, sessionItsEcId))   {
+        	ERROR_STREAMC << "cannot set EtsiTs103097Certificate ID" << std::endl;
+		return false;
+	}
+
+	dump_ttcn_object(sessionItsEcCert, "ITS EC Certificate (encoded): ");
+	
+	ret_cert = sessionItsEcCert;
 
 	DEBUGC_STREAM_RETURNS_OK;
 	return true; 
@@ -685,6 +712,7 @@ ItsPkiSession::EcEnrollmentResponse_Status(OCTETSTRING &response_raw)
 	DEBUGC_STREAM_CALLED;
 
 	OCTETSTRING payload;
+	std::cout << __LINE__ << ": EcEnrollmentResponse_Status()" << std::endl;
 	if (!etsiServices.DecryptPayload(response_raw, payload))
                 return false;
 	
@@ -777,19 +805,19 @@ ItsPkiSession::sessionCheckEcEnrollmentArguments(ItsPkiInternalData &idata)
 	DEBUGC_STREAM_CALLED;
 
 	if (sessionGetTechnicalKey() == NULL)   {
-		ERROR_STREAMC << "ItsPkiSession::EcEnrollmentRequest_Create() no ITS Technical Key" << std::endl;
+		ERROR_STREAMC << "ItsPkiSession::sessionCheckEcEnrollmentArguments() no ITS Technical Key" << std::endl;
 		return false;
 	}
 
 	if (!idata.CheckEcEnrollmentArguments())   {
-		ERROR_STREAMC << "ItsPkiSession::EcEnrollmentRequest_Create() invalid internal EC enrollment request data" << std::endl;
+		ERROR_STREAMC << "ItsPkiSession::sessionCheckEcEnrollmentArguments() invalid internal EC enrollment request data" << std::endl;
 		return false;
 	}
 
 	if ((sessionItsEcVerificationKey == NULL) && (idata.GetItsEcVerificationKey() == NULL))   {
 		sessionItsEcVerificationKey = ECKey_GeneratePrivateKey(); 
 		if (sessionItsEcVerificationKey == NULL)   {
-			ERROR_STREAMC << "ItsPkiSession::EcEnrollmentRequest_Create() cannot generaete EC Verification key" << std::endl;
+			ERROR_STREAMC << "ItsPkiSession::sessionCheckEcEnrollmentArguments() cannot generaete EC Verification key" << std::endl;
 			return false;
 		}
 	}
@@ -797,13 +825,13 @@ ItsPkiSession::sessionCheckEcEnrollmentArguments(ItsPkiInternalData &idata)
 	if ((sessionItsEcEncryptionKey == NULL) && (idata.GetItsEcEncryptionKey() == NULL) && idata.IsItsEcEncryptionKeyEnabled())   {
 		sessionItsEcEncryptionKey = ECKey_GeneratePrivateKey();
        		if (sessionItsEcEncryptionKey == NULL)   {	
-			ERROR_STREAMC << "ItsPkiSession::EcEnrollmentRequest_Create() cannot generaete EC Encryption key" << std::endl;
+			ERROR_STREAMC << "ItsPkiSession::sessionCheckEcEnrollmentArguments() cannot generaete EC Encryption key" << std::endl;
 			return false;
 		}
 	}
 
 	if (sessionGetCanonicalId(idata).empty())   {
-		ERROR_STREAMC << "ItsPkiSession::EcEnrollmentRequest_Create() cannot get session ITS Canonical ID" << std::endl;
+		ERROR_STREAMC << "ItsPkiSession::sessionCheckEcEnrollmentArguments() cannot get session ITS Canonical ID" << std::endl;
 		return false;
 	}
 
@@ -947,6 +975,42 @@ ItsPkiSession::EcEnrollmentResponse_SaveToFiles(ItsPkiInternalData &idata, OCTET
 
 // At Request
 bool
+ItsPkiSession::sessionCheckAtEnrollmentArguments(ItsPkiInternalData &idata)
+{
+	DEBUGC_STREAM_CALLED;
+
+	if (!idata.CheckAtEnrollmentArguments())   {
+		ERROR_STREAMC << "ItsPkiSession::sessionCheckAtEnrollmentArguments() invalid internal AT enrollment request data" << std::endl;
+		return false;
+	}
+
+	if ((sessionItsAtVerificationKey == NULL) && (idata.GetItsAtVerificationKey() == NULL))   {
+		sessionItsAtVerificationKey = ECKey_GeneratePrivateKey(); 
+		if (sessionItsAtVerificationKey == NULL)   {
+			ERROR_STREAMC << "ItsPkiSession::sessionCheckAtEnrollmentArguments() cannot generaete At Verification key" << std::endl;
+			return false;
+		}
+	}
+
+	if ((sessionItsAtEncryptionKey == NULL) && (idata.GetItsAtEncryptionKey() == NULL) && idata.IsItsAtEncryptionKeyEnabled())   {
+		sessionItsAtEncryptionKey = ECKey_GeneratePrivateKey();
+       		if (sessionItsAtEncryptionKey == NULL)   {	
+			ERROR_STREAMC << "ItsPkiSession::sessionCheckAtEnrollmentArguments() cannot generaete At Encryption key" << std::endl;
+			return false;
+		}
+	}
+
+	if (sessionGetCanonicalId(idata).empty())   {
+		ERROR_STREAMC << "ItsPkiSession::sessionCheckEcEnrollmentArguments() cannot get session ITS Canonical ID" << std::endl;
+		return false;
+	}
+
+	DEBUGC_STREAM_RETURNS_OK;
+	return true; 
+}
+
+
+bool
 ItsPkiSession::AtEnrollmentRequest_HeaderInfo(ItsPkiInternalData &idata, IEEE1609dot2::HeaderInfo &header_info)
 {
 	DEBUGC_STREAM_CALLED;
@@ -1002,10 +1066,10 @@ ItsPkiSession::AtEnrollmentRequest_SignedExternalPayload(ItsPkiInternalData &ida
 	dump_ttcn_object(tbs_encoded, "ToBeSigned encoded: ");
 
 	IEEE1609dot2::SignerIdentifier signer_id;
-	signer_id.digest() = idata.GetItsEcId();
+	signer_id.digest() = sessionGetItsEcId();
 
 	IEEE1609dot2BaseTypes::Signature signature;
-	if (!GetIEEE1609dot2Signature(idata, tbs_encoded, idata.GetItsEcCertBlob(), sessionGetItsEcVerificationKey(), signature))   {
+	if (!GetIEEE1609dot2Signature(idata, tbs_encoded, sessionGetItsEcCert(), sessionGetItsEcVerificationKey(), signature))   {
 		ERROR_STREAMC << "failed to sign" << std::endl;
 		return false;
 	}
@@ -1067,7 +1131,7 @@ ItsPkiSession::AtEnrollmentRequest_POP(ItsPkiInternalData &idata,
 
 	IEEE1609dot2BaseTypes::Signature signature;
 	OCTETSTRING signer = OCTETSTRING(0, NULL);
-	if (!GetIEEE1609dot2Signature(idata, tbs_encoded, signer, idata.GetItsAtVerificationKey(), signature))   {
+	if (!GetIEEE1609dot2Signature(idata, tbs_encoded, signer, sessionGetItsAtVerificationKey(), signature))   {
 		ERROR_STREAMC << "failed to sign" << std::endl;
 		return false;
 	}
@@ -1092,11 +1156,17 @@ ItsPkiSession::AtEnrollmentRequest_InnerAtRequest(ItsPkiInternalData &idata, OCT
 {
 	DEBUGC_STREAM_CALLED;
 
+#if 0
 	if (!idata.CheckAtEnrollmentArguments())   {
 		ERROR_STREAMC << "ItsPkiSession::AtEnrollmentRequest_InnerAtRequest() invalid internal AT enrollment data" << std::endl;
 		return false;
 	}
-
+#else
+	if (!sessionCheckAtEnrollmentArguments(idata))   {
+		ERROR_STREAMC << "ItsPkiSession::AtEnrollmentRequest_Create() invalid At session data" << std::endl;
+		return false;
+	}
+#endif
 	IEEE1609dot2BaseTypes::PublicVerificationKey v_pubkey;
         if (!GetItsAtPublicVerificationKey(v_pubkey))   {
 		ERROR_STREAMC << "cannot get ITS AT PublicVerificationKey" << std::endl;
@@ -1194,7 +1264,7 @@ ItsPkiSession::AtEnrollmentRequest_InnerAtRequest(ItsPkiInternalData &idata, OCT
 	innerAtRequest.ecSignature() = ec_signature;
 
 	innerAtRequest.publicKeys() = EtsiTs102941BaseTypes::PublicKeys(v_pubkey, OMIT_VALUE);
-	if(idata.GetItsAtEncryptionKey() != NULL)
+	if(sessionGetItsAtEncryptionKey() != NULL)
 		innerAtRequest.publicKeys().encryptionKey() = e_pubkey;
 	dump_ttcn_object(innerAtRequest.publicKeys(), "innerAtRequest.publicKeys: ");
 
@@ -1237,10 +1307,12 @@ ItsPkiSession::AtEnrollmentResponse_Status(OCTETSTRING &response_raw)
 {
 	DEBUGC_STREAM_CALLED;
 
+	std::cout << __LINE__ << ": AtEnrollmentResponse_Status()" << std::endl;
 	OCTETSTRING payload;
 	if (!etsiServices.DecryptPayload(response_raw, payload))
                 return false;
 	
+	std::cout << __LINE__ << ": AtEnrollmentResponse_Status()" << std::endl;
 	EtsiTs103097Module::EtsiTs103097Data__Signed__My response_data_signed = decEtsiTs103097DataSigned(payload);
 
 	IEEE1609dot2::Ieee1609Dot2Data payload_data = response_data_signed.content().signedData().tbsData().payload().data();
@@ -1249,13 +1321,16 @@ ItsPkiSession::AtEnrollmentResponse_Status(OCTETSTRING &response_raw)
 	if (!payload_data.content().ischosen(IEEE1609dot2::Ieee1609Dot2Content::ALT_unsecuredData))
 		return false;
 
+	std::cout << __LINE__ << ": AtEnrollmentResponse_Status()" << std::endl;
 	EtsiTs102941MessagesCa::EtsiTs102941Data response_inner_data = decEtsiTs102941Data(payload_data.content().unsecuredData());
 	if (!response_inner_data.content().ischosen(EtsiTs102941MessagesCa::EtsiTs102941DataContent::ALT_authorizationResponse))
 		return false;
 
+	std::cout << __LINE__ << ": AtEnrollmentResponse_Status() " << response_inner_data.content().authorizationResponse().responseCode() << std::endl;
 	if (response_inner_data.content().authorizationResponse().responseCode() != EtsiTs102941TypesAuthorization::AuthorizationResponseCode::ok)
 		return false;
 
+	std::cout << __LINE__ << ": AtEnrollmentResponse_Status()" << std::endl;
 	DEBUGC_STREAM_RETURNS_OK;
 	return true; 
 }
@@ -1267,6 +1342,7 @@ ItsPkiSession::AtEnrollmentResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING
 	DEBUGC_STREAM_CALLED;
 
 	OCTETSTRING payload;
+	std::cout << __LINE__ << ": AtEnrollmentResponse_Parse()" << std::endl;
 	if (!etsiServices.DecryptPayload(response_raw, payload))   {
                 ERROR_STREAMC << "decrypt payload failed" << std::endl;
                 return false;

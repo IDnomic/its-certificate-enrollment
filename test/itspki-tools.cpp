@@ -359,10 +359,7 @@ ParseAtEnrollmentCmdArguments(ItsPkiCmdArguments cmd_args, ItsPkiInternalData &i
 		key = ECKey_ReadPrivateKeyB64(cmd_args.its_at_vkey_b64.c_str()); 
 	else
 		key = ECKey_GeneratePrivateKey();
-	if (!idata.SetItsAtVerificationKey(key))   {
-		ERROR_STREAM << "AT enroll: cannot read from file, base64 string or generate the AT verification key "<< std::endl;
-		return false;
-	}
+	idata.SetItsAtVerificationKey(key);
 
 	if (cmd_args.its_at_ekey_enable)   {
 		key = NULL;
@@ -370,10 +367,7 @@ ParseAtEnrollmentCmdArguments(ItsPkiCmdArguments cmd_args, ItsPkiInternalData &i
 			key = ECKey_ReadPrivateKey(cmd_args.its_at_ekey.c_str()); 
 		else
 			key = ECKey_GeneratePrivateKey();
-		if (!idata.SetItsAtEncryptionKey(key))   {
-			ERROR_STREAM << "At enroll: cannot read from file or generate ITS AT encryption key "<< std::endl;
-			return false;
-		}
+		idata.SetItsAtEncryptionKey(key);
 	}
 
 	// Parse EA certificate

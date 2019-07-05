@@ -10,6 +10,7 @@
 #include <openssl/bio.h>
 #include <openssl/pem.h>
 
+#include "its/utils-openssl.hh"
 #include "its/utils-ttcn.hh"
 #include "its/itspki-debug.hh"
 
@@ -33,6 +34,46 @@ dump_ttcn_object(Base_Type &, const char *)
 	return true;
 }
 #endif
+
+
+bool
+getEtsiTs103097CertId(OCTETSTRING &cert_raw, OCTETSTRING &ret_certId)
+{
+        DEBUG_STREAM_CALLED;
+
+        IEEE1609dot2::module_object.pre_init_module();
+        IEEE1609dot2BaseTypes::module_object.pre_init_module();
+
+        IEEE1609dot2::CertificateBase cert = decEtsiTs103097Certificate(cert_raw);
+
+        IEEE1609dot2::VerificationKeyIndicator vKeyIndicator = cert.toBeSigned().verifyKeyIndicator();
+        if (!vKeyIndicator.ischosen(IEEE1609dot2::VerificationKeyIndicator::ALT_verificationKey))   {
+                ERROR_STREAM << "ItsPkiInternalData::SetCertID() not supported type of VerificationKeyIndicator" << std::endl;
+                return false;
+        }
+
+        IEEE1609dot2BaseTypes::PublicVerificationKey pubKey = vKeyIndicator.verificationKey();
+        if (pubKey.ischosen(IEEE1609dot2BaseTypes::PublicVerificationKey::ALT_ecdsaNistP256) ||
+                        pubKey.ischosen(IEEE1609dot2BaseTypes::PublicVerificationKey::ALT_ecdsaBrainpoolP256r1))   {
+                if (!OpenSSL_SHA256_HashedID(cert_raw, ret_certId))   {
+                        ERROR_STREAM << "ItsPkiInternalData::SetCertID() OpenSSL SHA256 HashedID failed" << std::endl;
+                        return false;
+                }
+        }
+        else if (pubKey.ischosen(IEEE1609dot2BaseTypes::PublicVerificationKey::ALT_ecdsaBrainpoolP384r1))   {
+                if (!OpenSSL_SHA384_HashedID(cert_raw, ret_certId))   {
+                        ERROR_STREAM << "ItsPkiInternalData::SetCertID() OpenSSL SHA384 HashedID failed" << std::endl;
+                        return false;
+                }
+        }
+        else   {
+                ERROR_STREAM << "ItsPkiInternalData::setEncryptionKey() not supported PublicVerificationKey type" << std::endl;
+                return false;
+        }
+
+        DEBUG_STREAM_RETURNS_OK;
+        return true;
+}
 
 
 IEEE1609dot2::CertificateBase

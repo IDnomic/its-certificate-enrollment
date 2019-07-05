@@ -197,7 +197,7 @@ ItsPkiInternalData::IEEE1609dot2_Sign(OCTETSTRING &data, OCTETSTRING &signer,
 	return true;
 }
 
-
+#if 0
 bool
 ItsPkiInternalData::getCertId(OCTETSTRING &cert_raw, OCTETSTRING &ret_certId)
 {
@@ -236,7 +236,7 @@ ItsPkiInternalData::getCertId(OCTETSTRING &cert_raw, OCTETSTRING &ret_certId)
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
 }
-
+#endif
 
 bool
 ItsPkiInternalData::setEncryptionKey(OCTETSTRING &cert_raw, void **ret_key)
@@ -309,7 +309,7 @@ ItsPkiInternalData::SetEAEncryptionKey(OCTETSTRING &data)
 		DEBUGC_STREAM << "ItsPkiInternalData::setEACertificate() cannot set EA encryption key" << std::endl;
 		return false;
 	}
-	if (!ItsPkiInternalData::getCertId(data, eaId))   {
+	if (!getEtsiTs103097CertId(data, eaId))   {
 		DEBUGC_STREAM << "ItsPkiInternalData::setEACertificate() cannot set ID of EA certificate" << std::endl;
 		return false;
 	}
@@ -331,7 +331,7 @@ ItsPkiInternalData::SetAAEncryptionKey(OCTETSTRING &data)
 		DEBUGC_STREAM << "ItsPkiInternalData::setAACertificate() cannot set AA encryption key" << std::endl;
 		return false;
 	}
-	if (!ItsPkiInternalData::getCertId(data, aaId))   {
+	if (!getEtsiTs103097CertId(data, aaId))   {
 		DEBUGC_STREAM << "ItsPkiInternalData::setAACertificate() cannot set ID of AA certificate" << std::endl;
 		return false;
 	}
@@ -349,7 +349,7 @@ ItsPkiInternalData::SetItsEcId(OCTETSTRING &data)
 {
 	DEBUGC_STREAM_CALLED;
 	
-	if (!getCertId(data, itsEcId))   {
+	if (!getEtsiTs103097CertId(data, itsEcId))   {
 		DEBUGC_STREAM << "ItsPkiInternalData::getCertId(() cannot set Its Ec ID" << std::endl;
 		return false;
 	}
@@ -491,12 +491,12 @@ ItsPkiInternalData::CheckEnrollmentDataItsEc()
 	DEBUGC_STREAM_CALLED;
 
 	if (!itsEcId.is_bound() || itsEcId.lengthof() == 0)   {
-		DEBUGC_STREAM << "missing ITS EC ID" << std::endl;
+		ERROR_STREAMC << "missing ITS EC ID" << std::endl;
 		return false;
 	}
 
 	if (!itsEcCert_blob.is_bound() || itsEcCert_blob.lengthof() == 0)   {
-		DEBUGC_STREAM << "missing ITS EC certificatge blob" << std::endl;
+		ERROR_STREAMC << "missing ITS EC certificatge blob" << std::endl;
 		return false;
 	}
 	
@@ -550,16 +550,17 @@ bool
 ItsPkiInternalData::CheckAtEnrollmentArguments()
 {
 	DEBUGC_STREAM_CALLED;
-	
+
+#if 0	
 	if (itsAtEncryptionKey == NULL)   {
 		ERROR_STREAMC << "At enrollment internal data: needs ITS AT encryption key " << std::endl;
 		return false;
 	}
-
 	if (itsAtVerificationKey == NULL)   {
 		ERROR_STREAMC << "At enroll internal data: needs ITS AT verification key" << std::endl;
 		return false;
 	}
+#endif
 	if (!CheckEnrollmentDataEA())   {
 		ERROR_STREAMC << "At enroll: invalid EA parameters" << std::endl;
 		return false;
@@ -568,6 +569,7 @@ ItsPkiInternalData::CheckAtEnrollmentArguments()
 		ERROR_STREAMC << "At enroll: invalid AA parameters" << std::endl;
 		return false;
 	}
+#if 0
 	if (!CheckEnrollmentDataItsEc())   {
 		ERROR_STREAMC << "At enroll: invalid ITS EC data" << std::endl;
 		return false;
@@ -580,6 +582,7 @@ ItsPkiInternalData::CheckAtEnrollmentArguments()
 		ERROR_STREAMC << "At enroll: ITS canonical ID do not set" << std::endl;
 		return false;
 	}
+#endif
 	if (!CheckAidSsp())   {
 		ERROR_STREAMC << "at enroll: invalid ITS AID SSP" << std::endl;
 		return false;

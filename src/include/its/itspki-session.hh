@@ -36,6 +36,10 @@ private:
 	void *sessionItsEcEncryptionKey = NULL;
 	void *sessionItsAtVerificationKey = NULL;
 	void *sessionItsAtEncryptionKey = NULL;
+	
+	OCTETSTRING sessionItsEcCert;
+	OCTETSTRING sessionItsEcId;
+
 	std::string its_id;
 
 	bool GetPublicVerificationKey(void *, IEEE1609dot2BaseTypes::PublicVerificationKey &);
@@ -60,10 +64,13 @@ public:
 	void *sessionGetItsEcEncryptionKey();
 	void *sessionGetItsAtVerificationKey();
 	void *sessionGetItsAtEncryptionKey();
+	OCTETSTRING &sessionGetItsEcCert();
+	OCTETSTRING &sessionGetItsEcId();
 
 	std::string sessionGetCanonicalId(ItsPkiInternalData &);
 	std::string sessionGetItsID() { return its_id; };
 	bool sessionCheckEcEnrollmentArguments(ItsPkiInternalData &);
+	bool sessionCheckAtEnrollmentArguments(ItsPkiInternalData &);
 
 	ItsPkiInternalData *GetIData() { return idata;};
 	OCTETSTRING request_data;

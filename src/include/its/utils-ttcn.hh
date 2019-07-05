@@ -11,9 +11,12 @@
 #include "EtsiTs102941TypesAuthorization.hh"
 #include "EtsiTs102941TypesEnrolment.hh"
 
+
 bool dump_ttcn_object(Base_Type &, const char *);
 
 // extern pthread_mutex_t mutex_encode_request;
+
+bool getEtsiTs103097CertId(OCTETSTRING &, OCTETSTRING &);
 
 IEEE1609dot2::CertificateBase decEtsiTs103097Certificate(const OCTETSTRING &);
 IEEE1609dot2::Ieee1609Dot2Data decIeee1609Dot2Data(const OCTETSTRING &);

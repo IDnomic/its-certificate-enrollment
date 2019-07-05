@@ -66,6 +66,7 @@ private:
 	std::string itsEcCertFile;
 	std::string itsEcVerificationKeyFile;
 	std::string itsEcEncryptionKeyFile;
+	bool itsNeedEcEnrollment = false;
 	
 	std::string itsEcCertSave2File;
 	std::string itsEcVerificationKeySave2File;
@@ -100,7 +101,7 @@ private:
 	void init();
 
 	bool setEncryptionKey(OCTETSTRING &, void **);
-	bool getCertId(OCTETSTRING &, OCTETSTRING &);
+	// bool getCertId(OCTETSTRING &, OCTETSTRING &);
 
 	bool CheckEnrollmentDataEA();
 	bool CheckEnrollmentDataAA();
@@ -184,22 +185,29 @@ public:
 		return itsEcEncryptionKeySave2File;
 	};
 
-	bool SetItsAtVerificationKey(void *key) {
+	void SetItsAtVerificationKey(void *key) {
 		itsAtVerificationKey = key;
-		return ((key == NULL) ? false : true);
 	};
 	void *GetItsAtVerificationKey() {
 		return itsAtVerificationKey;
 	};
 	
-	bool SetItsAtEncryptionKey(void *key) {
+	void SetItsAtEncryptionKey(void *key) {
 		itsAtEncryptionKey = key;
-		itsAtEncryptionKeyEnable = ((key == NULL) ? false : true);
-		return itsAtEncryptionKeyEnable;
+		if (key != NULL) itsAtEncryptionKeyEnable = true;
 	};
 	void *GetItsAtEncryptionKey() {
 		return (itsAtEncryptionKeyEnable ? itsAtEncryptionKey : NULL);
 	};
+	void SetItsAtEncryptionKeyEnable(bool enable) {
+		itsAtEncryptionKeyEnable = enable;
+	}
+	bool IsItsAtEncryptionKeyEnabled() {
+		return itsAtEncryptionKeyEnable;
+	}
+
+
+
 
 	bool SetAAEncryptionKey(OCTETSTRING &);
 
@@ -231,6 +239,9 @@ public:
 
 	bool IsItsRegistrationNeeded() { return itsNeedRegistration; };
 	void SetItsRegistrationFlag(bool needed) { itsNeedRegistration = needed; };
+	
+	bool IsEcEnrollmentNeeded() { return itsNeedEcEnrollment; };
+	void SetEcEnrollmentFlag(bool needed) { itsNeedEcEnrollment = needed; };
 	
 	bool CheckItsRegisterData();
 	bool CheckEcEnrollmentArguments();
