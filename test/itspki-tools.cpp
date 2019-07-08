@@ -311,11 +311,12 @@ ParseEcEnrollmentCmdArguments(ItsPkiCmdArguments cmd_args, ItsPkiInternalData &i
 	DEBUG_STREAM << "ITS Canonical ID: '" << idata.GetCanonicalId() << "'" << std::endl;
 
 	// Set permissions
-	if (!idata.SetAidSsp(cmd_args.app_perms_psid, cmd_args.app_perms_ssp_opaque, cmd_args.app_perms_ssp_bitmap))   {
+	// if (!idata.SetAidSsp(cmd_args.app_perms_psid, cmd_args.app_perms_ssp_opaque, cmd_args.app_perms_ssp_bitmap))   {
+	if (!idata.EcAddAidSsp(cmd_args.app_perms_psid, cmd_args.app_perms_ssp_opaque, cmd_args.app_perms_ssp_bitmap))   {
 		ERROR_STREAM << "EC enroll arguments: cannot set ITS AID SSP list" << std::endl;
 		return false;
 	}
-	DEBUG_STREAM << "ITS AID SSP(id=" << idata.GetAppPermsSsp().psid << ",tag=" << idata.GetAppPermsSsp().type << ",ssp=" << oct2str(idata.GetAppPermsSsp().ssp) << ")" << std::endl;
+	DEBUG_STREAM << "ITS AID-SSP number of elements " << idata.EcGetAppPermsSsp().n_elem() << std::endl;
 
 	// Set ITS Hash algorithm
 	if (!idata.SetHashAlgorithm(cmd_args.GetHashAlgorithm()))   {
@@ -434,11 +435,11 @@ ParseAtEnrollmentCmdArguments(ItsPkiCmdArguments cmd_args, ItsPkiInternalData &i
 	DEBUG_STREAM << "ITS Canonical ID: '" << idata.GetCanonicalId() << "'" << std::endl;
 	
 	// Set permissions
-	if (!idata.SetAidSsp(cmd_args.app_perms_psid, cmd_args.app_perms_ssp_opaque, cmd_args.app_perms_ssp_bitmap))   {
+	if (!idata.AtAddAidSsp(cmd_args.app_perms_psid, cmd_args.app_perms_ssp_opaque, cmd_args.app_perms_ssp_bitmap))   {
 		ERROR_STREAM << "EC enroll arguments: cannot set ITS AID SSP list" << std::endl;
 		return false;
 	}
-	DEBUG_STREAM << "ITS AID SSP(id=" << idata.GetAppPermsSsp().psid << ",tag=" << idata.GetAppPermsSsp().type << ",ssp=" << oct2str(idata.GetAppPermsSsp().ssp) << ")" << std::endl;
+	dump_ttcn_object(idata.AtGetAppPermsSsp(), "ITS AT AID-SSP: ");
 
 	// Set ITS Hash algorithm
 	if (!idata.SetHashAlgorithm(cmd_args.GetHashAlgorithm()))   {

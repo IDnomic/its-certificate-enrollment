@@ -46,7 +46,14 @@ private:
     	std::string its_name_header;
 	std::string profile;
 	
-	struct PsidSsp psid_ssp;
+	IEEE1609dot2BaseTypes::SequenceOfPsidSsp ec_ssp_seq;
+	// struct PsidSsp *ec_psid_ssp = NULL;
+	// size_t ec_psid_ssp_num = 0;
+	IEEE1609dot2BaseTypes::SequenceOfPsidSsp at_ssp_seq;
+	// struct PsidSsp *at_psid_ssp = NULL;
+	// size_t at_psid_ssp_num = 0;
+
+
 	IEEE1609dot2BaseTypes::HashAlgorithm::enum_type hash_algorithm = IEEE1609dot2BaseTypes::HashAlgorithm::sha256;
 	
 	unsigned char *validityrestrictions = NULL;
@@ -106,6 +113,10 @@ private:
 	bool CheckEnrollmentDataEA();
 	bool CheckEnrollmentDataAA();
 	bool CheckEnrollmentDataItsEc();
+	
+	bool AddAidSsp(IEEE1609dot2BaseTypes::SequenceOfPsidSsp &, const long, const std::string &, const std::string &);
+	bool AddAidSsp(IEEE1609dot2BaseTypes::SequenceOfPsidSsp &, std::string &);
+
 public:
 	ItsPkiInternalData();
 	~ItsPkiInternalData();
@@ -120,9 +131,14 @@ public:
 	bool SetProfile(const std::string &_profile) {profile = _profile; return true;};
 	std::string GetProfile() { return profile; };
 
-	bool SetAidSsp(const long, const std::string &, const std::string &);
-	struct PsidSsp &GetAppPermsSsp() { return psid_ssp; };
-	bool CheckAidSsp();
+	bool EcAddAidSsp(const long _id, const std::string &_opaque, const std::string &_bitmap) { return AddAidSsp(ec_ssp_seq, _id, _opaque, _bitmap); };
+	bool EcAddAidSsp(std::string &_str) { return AddAidSsp(ec_ssp_seq, _str); };
+	bool AtAddAidSsp(const long _id, const std::string &_opaque, const std::string &_bitmap) { return AddAidSsp(at_ssp_seq, _id, _opaque, _bitmap); };
+	bool AtAddAidSsp(std::string &_str) { return AddAidSsp(at_ssp_seq, _str); };
+	bool EcCheckAidSsp() { return (ec_ssp_seq.is_bound()) && (ec_ssp_seq.n_elem() > 0); };
+	bool AtCheckAidSsp() { return (at_ssp_seq.is_bound()) && (at_ssp_seq.n_elem() > 0); };
+	IEEE1609dot2BaseTypes::SequenceOfPsidSsp &EcGetAppPermsSsp() { return ec_ssp_seq; };
+	IEEE1609dot2BaseTypes::SequenceOfPsidSsp &AtGetAppPermsSsp() { return at_ssp_seq; };
 	
 	bool SetHashAlgorithm(IEEE1609dot2BaseTypes::HashAlgorithm::enum_type algo) {
 		hash_algorithm = algo;

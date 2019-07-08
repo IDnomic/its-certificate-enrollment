@@ -4,7 +4,7 @@
 #include <iostream>
 #include <exception>
 #include <memory>
-#include <boost/program_options.hpp>
+// #include <boost/program_options.hpp>
  
 #include <openssl/ec.h>
 #include <openssl/err.h>
@@ -801,13 +801,11 @@ ItsPkiEtsi::DecryptPayload(OCTETSTRING &in_raw, OCTETSTRING &payload)
 {
 	DEBUGC_STREAM_CALLED;
 	
-	std::cout << __LINE__ << ": DecryptPayload()" << std::endl;
 	if (!ready)   {
                 ERROR_STREAMC << "error: etsi service is not properly initialized" << std::endl;
 		return false;
 	}
 
-	std::cout << __LINE__ << ": DecryptPayload()" << std::endl;
         // { protocolVersion := 3, content := { encryptedData := { recipients := { { pskRecipInfo := ''O } }, ciphertext := { aes128ccm := { nonce := ''O, ccmCiphertext := ''O } } } } }
         EtsiTs103097Module::EtsiTs103097Data__Encrypted__My respDataEncrypted;
         EtsiTs103097Module::EtsiTs103097Data__Encrypted__My_decoder(in_raw, respDataEncrypted, "OER");
@@ -817,7 +815,6 @@ ItsPkiEtsi::DecryptPayload(OCTETSTRING &in_raw, OCTETSTRING &payload)
         }
         dump_ttcn_object(respDataEncrypted, "EtsiTs103097Module::EtsiTs103097Data__Encrypted__My response: ");
 
-	std::cout << __LINE__ << ": DecryptPayload()" << std::endl;
         if (!respDataEncrypted.content().ischosen(IEEE1609dot2::Ieee1609Dot2Content::ALT_encryptedData))   {
                 ERROR_STREAMC << "'"<< respDataEncrypted.content().get_selection() << "' content type instead of expected 'ALT_encryptedData'" << std::endl;
                 return false;
@@ -835,7 +832,6 @@ ItsPkiEtsi::DecryptPayload(OCTETSTRING &in_raw, OCTETSTRING &payload)
                 return false;
         }
 
-	std::cout << __LINE__ << ": DecryptPayload()" << std::endl;
         IEEE1609dot2::AesCcmCiphertext aes128ccm = respDataEncrypted.content().encryptedData().ciphertext().aes128ccm();
         dump_ttcn_object(aes128ccm, "IEEE1609dot2::AesCcmCiphertext: ");
 
@@ -843,9 +839,6 @@ ItsPkiEtsi::DecryptPayload(OCTETSTRING &in_raw, OCTETSTRING &payload)
                 ERROR_STREAMC << "decrypt with Aes128CCM failed" << std::endl;
                 return false;
         }
-
-
-	std::cout << __LINE__ << ": DecryptPayload()" << std::endl;
 
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;

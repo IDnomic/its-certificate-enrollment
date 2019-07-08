@@ -386,24 +386,12 @@ ItsPkiSession::EcEnrollmentRequest_InnerEcRequest(ItsPkiInternalData &idata, Ets
 		return false;
 	}
 
-	struct ItsPkiInternalData::PsidSsp idata_psidssp = idata.GetAppPermsSsp();
-	CHARSTRING id = CHARSTRING(id_str.c_str());
-
-	IEEE1609dot2BaseTypes::ServiceSpecificPermissions ssp;
-	if (idata_psidssp.type == IEEE1609dot2BaseTypes::ServiceSpecificPermissions::ALT_opaque)   {
-		ssp.opaque() = idata_psidssp.ssp;
-	}
-	else if (idata_psidssp.type == IEEE1609dot2BaseTypes::ServiceSpecificPermissions::ALT_bitmapSsp)  {
-		ssp.bitmapSsp() = idata_psidssp.ssp;
-	}
-	else   {
-		ERROR_STREAMC << "failed: unknown SSP type '" << idata_psidssp.type << "'" << std::endl;
+	if (!idata.EcCheckAidSsp())   {
+		ERROR_STREAMC << "invalid EC permissions" << std::endl;
 		return false;
 	}
-	IEEE1609dot2BaseTypes::PsidSsp psid_ssp = IEEE1609dot2BaseTypes::PsidSsp(idata_psidssp.psid, ssp);
-	IEEE1609dot2BaseTypes::SequenceOfPsidSsp ssp_seq;
-	ssp_seq[0] = psid_ssp;
 
+	// IEEE1609dot2BaseTypes::SequenceOfPsidSsp ssp_seq = idata.EcGetAppPermsSsp();
 	// requestedSubjectAttributes := { id := omit, validityPeriod := omit, region := omit, assuranceLevel := omit,
 	// 	appPermissions := { { psid := 0, ssp := { bitmapSsp := ''O } } },
 	// 	certIssuePermissions := omit }
@@ -412,7 +400,7 @@ ItsPkiSession::EcEnrollmentRequest_InnerEcRequest(ItsPkiInternalData &idata, Ets
 	cert_attrs.validityPeriod() = OMIT_VALUE;
 	cert_attrs.region() = OMIT_VALUE;
 	cert_attrs.assuranceLevel() = OMIT_VALUE;
-	cert_attrs.appPermissions() = ssp_seq;
+	cert_attrs.appPermissions() = idata.EcGetAppPermsSsp();
 	cert_attrs.certIssuePermissions() = OMIT_VALUE;
 
 	// verificationKey := { ecdsaNistP256 := { uncompressedP256 := { x := ''O, y := ''O } } },
@@ -435,6 +423,7 @@ ItsPkiSession::EcEnrollmentRequest_InnerEcRequest(ItsPkiInternalData &idata, Ets
 		pubkeys.encryptionKey() = encryption_pubkey;
 	}
 
+	CHARSTRING id = CHARSTRING(id_str.c_str());
 	//  InnerEcRequest := { itsId := "", certificateFormat := 1, publicKeys := { verificationKey := { ... }, encryptionKey := { ... } }, requestedSubjectAttributes := { ... } }
 	inner_ec_request = EtsiTs102941TypesEnrolment::InnerEcRequest( id, ItsPkiInternalData::CertificateFormat::ts103097v131, pubkeys, cert_attrs);
     
@@ -653,7 +642,6 @@ ItsPkiSession::EcEnrollmentResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING
 	DEBUGC_STREAM_CALLED;
 
 	OCTETSTRING payload;
-	std::cout << __LINE__ << ": EcEnrollmentResponse_Parse()" << std::endl;
 	if (!etsiServices.DecryptPayload(response_raw, payload))   {
                 ERROR_STREAMC << "decrypt payload failed" << std::endl;
                 return false;
@@ -712,23 +700,34 @@ ItsPkiSession::EcEnrollmentResponse_Status(OCTETSTRING &response_raw)
 	DEBUGC_STREAM_CALLED;
 
 	OCTETSTRING payload;
-	std::cout << __LINE__ << ": EcEnrollmentResponse_Status()" << std::endl;
-	if (!etsiServices.DecryptPayload(response_raw, payload))
-                return false;
+	if (!etsiServices.DecryptPayload(response_raw, payload))   {
+        	ERROR_STREAMC << "cannot decrypt payload" << std::endl;
+		return false;
+	}
 	
 	EtsiTs103097Module::EtsiTs103097Data__Signed__My response_data_signed = decEtsiTs103097DataSigned(payload);
 
 	IEEE1609dot2::Ieee1609Dot2Data payload_data = response_data_signed.content().signedData().tbsData().payload().data();
-	if (!payload_data.is_present()) 
+	if (!payload_data.is_present())  {
+        	ERROR_STREAMC << "no 'PAYLOAD' in SignedData" << std::endl;
 		return false;
-	if (!payload_data.content().ischosen(IEEE1609dot2::Ieee1609Dot2Content::ALT_unsecuredData))
+	}
+	if (!payload_data.content().ischosen(IEEE1609dot2::Ieee1609Dot2Content::ALT_unsecuredData))   {
+        	ERROR_STREAMC << "expected 'UnsecuredData' Ieee1609Dot2Content content type" << std::endl;
 		return false;
+	}
 
 	EtsiTs102941MessagesCa::EtsiTs102941Data response_inner_data = decEtsiTs102941Data(payload_data.content().unsecuredData());
-	if (!response_inner_data.content().ischosen(EtsiTs102941MessagesCa::EtsiTs102941DataContent::ALT_enrolmentResponse))
+	if (!response_inner_data.content().ischosen(EtsiTs102941MessagesCa::EtsiTs102941DataContent::ALT_enrolmentResponse))   {
+        	ERROR_STREAMC << "expected 'EnrollmentResponse' inner data type " << std::endl;
 		return false;
-	if (response_inner_data.content().enrolmentResponse().responseCode() != EtsiTs102941TypesEnrolment::EnrolmentResponseCode::ok)
+	}
+
+	EtsiTs102941TypesEnrolment::EnrolmentResponseCode respCode = response_inner_data.content().enrolmentResponse().responseCode();
+	if (respCode != EtsiTs102941TypesEnrolment::EnrolmentResponseCode::ok)   {
+        	ERROR_STREAMC << "expected response code 'OK', received '" << respCode.enum_to_str(respCode) << "'" << std::endl;
 		return false;
+	}
 
 	DEBUGC_STREAM_RETURNS_OK;
 	return true; 
@@ -1207,22 +1206,7 @@ ItsPkiSession::AtEnrollmentRequest_InnerAtRequest(ItsPkiInternalData &idata, OCT
 	}
 	dump_ttcn_object(keyTag, "KeyTag: ");
 	
-	struct ItsPkiInternalData::PsidSsp idata_psidssp = idata.GetAppPermsSsp();
-        IEEE1609dot2BaseTypes::ServiceSpecificPermissions ssp;
-        if (idata_psidssp.type == IEEE1609dot2BaseTypes::ServiceSpecificPermissions::ALT_opaque)  {
-                ssp.opaque() = idata_psidssp.ssp;
-	}
-        else if (idata_psidssp.type == IEEE1609dot2BaseTypes::ServiceSpecificPermissions::ALT_bitmapSsp)  {
-                ssp.bitmapSsp() = idata_psidssp.ssp;
-	}
-        else   {
-                ERROR_STREAMC << "unknown SSP type '" << idata_psidssp.type << "'" << std::endl;
-                return false;
-        }
-        IEEE1609dot2BaseTypes::PsidSsp psid_ssp = IEEE1609dot2BaseTypes::PsidSsp(idata_psidssp.psid, ssp);
-        IEEE1609dot2BaseTypes::SequenceOfPsidSsp ssp_seq;
-        ssp_seq[0] = psid_ssp;
-
+        IEEE1609dot2BaseTypes::SequenceOfPsidSsp ssp_seq = idata.AtGetAppPermsSsp();
         EtsiTs102941BaseTypes::CertificateSubjectAttributes cert_attrs = EtsiTs102941BaseTypes::CertificateSubjectAttributes(
 			OMIT_VALUE, OMIT_VALUE, OMIT_VALUE, OMIT_VALUE, ssp_seq, OMIT_VALUE);
 
@@ -1307,30 +1291,36 @@ ItsPkiSession::AtEnrollmentResponse_Status(OCTETSTRING &response_raw)
 {
 	DEBUGC_STREAM_CALLED;
 
-	std::cout << __LINE__ << ": AtEnrollmentResponse_Status()" << std::endl;
 	OCTETSTRING payload;
-	if (!etsiServices.DecryptPayload(response_raw, payload))
-                return false;
+	if (!etsiServices.DecryptPayload(response_raw, payload))   {
+        	ERROR_STREAMC << "cannot decrypt payload" << std::endl;
+		return false;
+	}
 	
-	std::cout << __LINE__ << ": AtEnrollmentResponse_Status()" << std::endl;
 	EtsiTs103097Module::EtsiTs103097Data__Signed__My response_data_signed = decEtsiTs103097DataSigned(payload);
 
 	IEEE1609dot2::Ieee1609Dot2Data payload_data = response_data_signed.content().signedData().tbsData().payload().data();
-	if (!payload_data.is_present())
+	if (!payload_data.is_present())   {
+        	ERROR_STREAMC << "no 'PAYLOAD' in SignedData" << std::endl;
 		return false;
-	if (!payload_data.content().ischosen(IEEE1609dot2::Ieee1609Dot2Content::ALT_unsecuredData))
+	}
+	if (!payload_data.content().ischosen(IEEE1609dot2::Ieee1609Dot2Content::ALT_unsecuredData))   {
+        	ERROR_STREAMC << "expected 'UnsecuredData' Ieee1609Dot2Content content type" << std::endl;
 		return false;
+	}
 
-	std::cout << __LINE__ << ": AtEnrollmentResponse_Status()" << std::endl;
 	EtsiTs102941MessagesCa::EtsiTs102941Data response_inner_data = decEtsiTs102941Data(payload_data.content().unsecuredData());
-	if (!response_inner_data.content().ischosen(EtsiTs102941MessagesCa::EtsiTs102941DataContent::ALT_authorizationResponse))
+	if (!response_inner_data.content().ischosen(EtsiTs102941MessagesCa::EtsiTs102941DataContent::ALT_authorizationResponse))   {
+        	ERROR_STREAMC << "expected 'AuthorizationResponse' inner data type " << std::endl;
 		return false;
+	}
 
-	std::cout << __LINE__ << ": AtEnrollmentResponse_Status() " << response_inner_data.content().authorizationResponse().responseCode() << std::endl;
-	if (response_inner_data.content().authorizationResponse().responseCode() != EtsiTs102941TypesAuthorization::AuthorizationResponseCode::ok)
+	EtsiTs102941TypesAuthorization::AuthorizationResponseCode respCode = response_inner_data.content().authorizationResponse().responseCode();
+	if (respCode != EtsiTs102941TypesAuthorization::AuthorizationResponseCode::ok)   {
+        	ERROR_STREAMC << "expected response code 'OK', received '" << respCode.enum_to_str(respCode) << "'" << std::endl;
 		return false;
+	}
 
-	std::cout << __LINE__ << ": AtEnrollmentResponse_Status()" << std::endl;
 	DEBUGC_STREAM_RETURNS_OK;
 	return true; 
 }
@@ -1342,7 +1332,6 @@ ItsPkiSession::AtEnrollmentResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING
 	DEBUGC_STREAM_CALLED;
 
 	OCTETSTRING payload;
-	std::cout << __LINE__ << ": AtEnrollmentResponse_Parse()" << std::endl;
 	if (!etsiServices.DecryptPayload(response_raw, payload))   {
                 ERROR_STREAMC << "decrypt payload failed" << std::endl;
                 return false;

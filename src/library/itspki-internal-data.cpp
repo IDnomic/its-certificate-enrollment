@@ -2,7 +2,7 @@
 #include <vector>
 #include <iterator>
 #include <iostream>
-#include <boost/program_options.hpp>
+// #include <boost/program_options.hpp>
 
 #include "its/utils.hh"
 #include "its/itspki-debug.hh"
@@ -80,6 +80,13 @@ ItsPkiInternalData::SetCanonicalID(const std::string &id, const std::string &nm_
 
 ItsPkiInternalData::~ItsPkiInternalData()
 {
+#if 0
+	if (ec_psid_ssp)
+		free(ec_psid_ssp);
+
+	if (at_psid_ssp)
+		free(at_psid_ssp);
+#endif
 	ECKey_Free(technicalKey);
 	ECKey_Free(itsEcVerificationKey);
 	ECKey_Free(itsEcEncryptionKey);
@@ -93,8 +100,8 @@ ItsPkiInternalData::~ItsPkiInternalData()
 
 
 bool
-ItsPkiInternalData::SetAidSsp(const long app_perms_psid,
-		const std::string &app_perms_ssp_opaque, const std::string &app_perms_ssp_bitmap)
+ItsPkiInternalData::AddAidSsp(IEEE1609dot2BaseTypes::SequenceOfPsidSsp &ssp_seq, 
+		const long app_perms_psid, const std::string &app_perms_ssp_opaque, const std::string &app_perms_ssp_bitmap)
 {
 	DEBUGC_STREAM_CALLED;
 
@@ -102,22 +109,19 @@ ItsPkiInternalData::SetAidSsp(const long app_perms_psid,
 		ERROR_STREAMC << "missing mandatory 'app-perms-psid' argument" << std::endl;
 		return false;
 	}
+	else if (app_perms_ssp_opaque.empty() && app_perms_ssp_bitmap.empty())   {
+		ERROR_STREAMC << "'opaque' or 'bitmap' has to be  present" << std::endl;
+		return false;
+	}
 
-	psid_ssp.psid = app_perms_psid;
-
-	if (!app_perms_ssp_opaque.empty())    {
+	IEEE1609dot2BaseTypes::ServiceSpecificPermissions ssp;
+	if (!app_perms_ssp_opaque.empty())   {
 		if ((app_perms_ssp_opaque.length() % 2) != 0)   {
 			ERROR_STREAMC << "invalid 'app-perms-ssp opaque' hex string" << std::endl;
 			return false;
 		}
 
-		psid_ssp.ssp = str2oct(app_perms_ssp_opaque.c_str());
-		if (!psid_ssp.ssp.is_bound())   {
-			ERROR_STREAMC << "invalid SSP opaque hex string" << std::endl;
-			return false;
-		}
-
-		psid_ssp.type = IEEE1609dot2BaseTypes::ServiceSpecificPermissions::ALT_opaque;
+		ssp.opaque() = str2oct(app_perms_ssp_opaque.c_str());
 	}
 	else if (!app_perms_ssp_bitmap.empty())    {
 		if ((app_perms_ssp_bitmap.length() % 2) != 0)   {
@@ -125,47 +129,61 @@ ItsPkiInternalData::SetAidSsp(const long app_perms_psid,
 			return false;
 		}
 
-		psid_ssp.ssp = str2oct(app_perms_ssp_bitmap.c_str());
-		if (!psid_ssp.ssp.is_bound())   {
-			ERROR_STREAMC << "invalid PSID SSP hex string" << std::endl;
-			return false;
-		}
-
-		psid_ssp.type = IEEE1609dot2BaseTypes::ServiceSpecificPermissions::ALT_bitmapSsp;
+		ssp.bitmapSsp() = str2oct(app_perms_ssp_bitmap.c_str());
 	}
-	else   {
-		ERROR_STREAMC << "invalid or missing SSP data" << std::endl;
+	if (!ssp.is_bound())   {
+		ERROR_STREAMC << "invalid SSP hex string" << std::endl;
 		return false;
 	}
+
+	IEEE1609dot2BaseTypes::PsidSsp psid_ssp = IEEE1609dot2BaseTypes::PsidSsp(app_perms_psid, ssp);
+	int idx = ssp_seq.is_bound() ? ssp_seq.n_elem() : 0;
+	ssp_seq[idx] = psid_ssp;
 
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
 }
 
 
+// AtAddAidSsp(const long _id, const std::string &_opaque, const std::string &_bitmap) { return AddAidSsp(at_ssp_seq, _id, _opaque, _bitmap); };
 bool
-ItsPkiInternalData::CheckAidSsp()
+ItsPkiInternalData::AddAidSsp(IEEE1609dot2BaseTypes::SequenceOfPsidSsp &psidssp_seq, std::string &psidssp_str)
 {
 	DEBUGC_STREAM_CALLED;
 
-	if (psid_ssp.psid == 0)
-		return false;
+	char *str = strdup(psidssp_str.c_str());
+	char *token = strtok(str, ",");
+	while (token)   {
+		long id;
+		char *sep = NULL;
+		long psid = strtol(token, &sep, 10);
 
-	if (psid_ssp.type == IEEE1609dot2BaseTypes::ServiceSpecificPermissions::ALT_opaque)   {
-		if (!psid_ssp.ssp.is_bound())
+		if (psid == 0 || sep == NULL || *sep != ':')   {
+			ERROR_STREAMC << "cannot parse psid-ssp string '" << token << "'" << std::endl;
 			return false;
-	}
-	else if (psid_ssp.type == IEEE1609dot2BaseTypes::ServiceSpecificPermissions::ALT_bitmapSsp)   {
-		if (!psid_ssp.ssp.is_bound())
+		}
+		sep++;
+
+		char *star = strchr(sep, '*');
+		std::string opaque, bitmap;
+		if (star)
+			bitmap = std::string(sep, star - sep);
+		else
+			opaque = std::string(sep, strlen(sep));
+
+		if (!AddAidSsp(psidssp_seq, psid, opaque, bitmap))   {
+			ERROR_STREAMC << "cannot add psid-ssp  '" << token << "'" << std::endl;
 			return false;
+		}
+		
+		token = strtok(NULL, ",");
 	}
-	else   {
-		return false;
-	}
+	
+	free(str);
 
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
-}
+};
 
 
 bool
@@ -305,6 +323,10 @@ ItsPkiInternalData::SetEAEncryptionKey(OCTETSTRING &data)
 {
 	DEBUGC_STREAM_CALLED;
 
+	if (eaEncryptionKey != NULL)
+		ECKey_Free(eaEncryptionKey);
+	eaEncryptionKey = NULL;
+
 	if (!ItsPkiInternalData::setEncryptionKey(data, &eaEncryptionKey))   {
 		DEBUGC_STREAM << "ItsPkiInternalData::setEACertificate() cannot set EA encryption key" << std::endl;
 		return false;
@@ -327,6 +349,10 @@ ItsPkiInternalData::SetAAEncryptionKey(OCTETSTRING &data)
 {
 	DEBUGC_STREAM_CALLED;
 	
+	if (aaEncryptionKey != NULL)
+		ECKey_Free(aaEncryptionKey);
+	aaEncryptionKey = NULL;
+
 	if (!ItsPkiInternalData::setEncryptionKey(data, &aaEncryptionKey))   {
 		DEBUGC_STREAM << "ItsPkiInternalData::setAACertificate() cannot set AA encryption key" << std::endl;
 		return false;
@@ -372,9 +398,9 @@ ItsPkiInternalData::init()
 	IEEE1609dot2BaseTypes::module_object.pre_init_module();
 	EtsiTs103097Module::module_object.pre_init_module();
 
-	psid_ssp.psid = 0;
-	psid_ssp.type = IEEE1609dot2BaseTypes::ServiceSpecificPermissions::UNBOUND_VALUE;
-	psid_ssp.ssp = OCTETSTRING(0, NULL);
+	// psid_ssp.psid = 0;
+	// psid_ssp.type = IEEE1609dot2BaseTypes::ServiceSpecificPermissions::UNBOUND_VALUE;
+	// psid_ssp.ssp = OCTETSTRING(0, NULL);
 	hash_algorithm = IEEE1609dot2BaseTypes::HashAlgorithm::UNBOUND_VALUE;
 }
 
@@ -533,7 +559,7 @@ ItsPkiInternalData::CheckEcEnrollmentArguments()
 		ERROR_STREAMC << "EC enroll: invalid EA parameters" << std::endl;
 		return false;
 	}
-	if (!CheckAidSsp())   {
+	if (!EcCheckAidSsp())   {
 		ERROR_STREAMC << "EC enroll: invalid ITS AID SSP" << std::endl;
 		return false;
 	}
@@ -583,7 +609,7 @@ ItsPkiInternalData::CheckAtEnrollmentArguments()
 		return false;
 	}
 #endif
-	if (!CheckAidSsp())   {
+	if (!AtCheckAidSsp())   {
 		ERROR_STREAMC << "at enroll: invalid ITS AID SSP" << std::endl;
 		return false;
 	}
