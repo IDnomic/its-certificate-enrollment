@@ -160,29 +160,28 @@ ItsPkiInternalData::AddAidSsp(IEEE1609dot2BaseTypes::SequenceOfPsidSsp &psidssp_
 
 		if (psid == 0 || sep == NULL || *sep != ':')   {
 			ERROR_STREAMC << "cannot parse psid-ssp string '" << token << "'" << std::endl;
-			return false;
+			break;
 		}
 		sep++;
 
 		char *star = strchr(sep, '*');
 		std::string opaque, bitmap;
 		if (star)
-			bitmap = std::string(sep, star - sep);
+			opaque = std::string(sep, star - sep);
 		else
-			opaque = std::string(sep, strlen(sep));
+			bitmap = std::string(sep, strlen(sep));
 
 		if (!AddAidSsp(psidssp_seq, psid, opaque, bitmap))   {
 			ERROR_STREAMC << "cannot add psid-ssp  '" << token << "'" << std::endl;
-			return false;
+			break;
 		}
 		
 		token = strtok(NULL, ",");
 	}
-	
 	free(str);
 
 	DEBUGC_STREAM_RETURNS_OK;
-	return true;
+	return (token == NULL);
 };
 
 
