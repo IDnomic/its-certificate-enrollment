@@ -808,7 +808,14 @@ ItsPkiEtsi::DecryptPayload(OCTETSTRING &in_raw, OCTETSTRING &payload)
 
         // { protocolVersion := 3, content := { encryptedData := { recipients := { { pskRecipInfo := ''O } }, ciphertext := { aes128ccm := { nonce := ''O, ccmCiphertext := ''O } } } } }
         EtsiTs103097Module::EtsiTs103097Data__Encrypted__My respDataEncrypted;
-        EtsiTs103097Module::EtsiTs103097Data__Encrypted__My_decoder(in_raw, respDataEncrypted, "OER");
+	try   {
+        	EtsiTs103097Module::EtsiTs103097Data__Encrypted__My_decoder(in_raw, respDataEncrypted, "OER");
+	}
+	catch (const TC_Error& tc_error) {
+		ERROR_STREAMC << "cannot decode payload: " << oct2str(in_raw) << std::endl;
+		return false;
+	}
+
         if (!respDataEncrypted.is_bound()) {
                 ERROR_STREAMC << "cannot decode response encrypted data" << std::endl;
                 return false;

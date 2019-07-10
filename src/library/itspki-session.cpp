@@ -321,11 +321,16 @@ ItsPkiSession::ItsRegisterResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING 
 {
 	DEBUGC_STREAM_CALLED;
 
+	// TODO: parse properly...
 	OCTETSTRING decoded = str2oct(oct2str(response_raw));
 	std::string resp((const char *)((const unsigned char *)decoded), decoded.lengthof());
 
 	if (!json_get_tag_value(resp, "id", its_id))   {
 		ERROR_STREAMC << "Invalid ITS registration response: no 'id' tag" << std::endl;
+		return false;
+	}
+	else if (its_id.find_first_not_of( "0123456789" ) != std::string::npos)   {
+		ERROR_STREAMC << "Invalid ITS registration response: invalid id: '" << its_id << "" << std::endl;
 		return false;
 	}
 
