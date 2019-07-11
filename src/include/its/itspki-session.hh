@@ -88,6 +88,7 @@ public:
 	bool EcEnrollmentRequest_InnerEcRequest(ItsPkiInternalData &, EtsiTs102941TypesEnrolment::InnerEcRequest &);
 	bool EcEnrollmentRequest_InnerData(ItsPkiInternalData &, EtsiTs102941TypesEnrolment::InnerEcRequest &, IEEE1609dot2::Ieee1609Dot2Data &);
 	bool EcEnrollmentRequest_HeaderInfo(ItsPkiInternalData &, IEEE1609dot2::HeaderInfo &);
+	bool EcEnrollmentResponse_Parse(OCTETSTRING &);
 	bool EcEnrollmentResponse_Parse(OCTETSTRING &, OCTETSTRING &);
 	bool EcEnrollmentResponse_Status(OCTETSTRING &);
 	bool EcEnrollmentResponse_SaveToFiles(ItsPkiInternalData &, OCTETSTRING &);

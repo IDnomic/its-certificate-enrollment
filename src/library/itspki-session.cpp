@@ -644,6 +644,17 @@ ItsPkiSession::EncryptSignedData_ForAa(ItsPkiInternalData &idata, OCTETSTRING &t
 bool
 ItsPkiSession::EcEnrollmentResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING &ret_cert)
 {
+	if (!EcEnrollmentResponse_Parse(response_raw))
+		return false;
+	
+	ret_cert = sessionItsEcCert;
+	return true;
+}
+
+
+bool
+ItsPkiSession::EcEnrollmentResponse_Parse(OCTETSTRING &response_raw)
+{
 	DEBUGC_STREAM_CALLED;
 
 	OCTETSTRING payload;
@@ -692,8 +703,6 @@ ItsPkiSession::EcEnrollmentResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING
 
 	dump_ttcn_object(sessionItsEcCert, "ITS EC Certificate (encoded): ");
 	
-	ret_cert = sessionItsEcCert;
-
 	DEBUGC_STREAM_RETURNS_OK;
 	return true; 
 }
