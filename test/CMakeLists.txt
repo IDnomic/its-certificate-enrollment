@@ -9,8 +9,6 @@ pkg_check_modules(ETSITS102941 REQUIRED EtsiTs102941)
 
 add_executable( unit_tests
     itspki-tests.cpp
-    itspki-report.cpp
-    utils-curl.cpp
     itspki-cmd-args.cpp
     itspki-tools.cpp
     )
@@ -30,7 +28,6 @@ target_link_libraries(
     libitspki_static
     -lboost_program_options
     -lxml2 -lpthread -lrt -lncurses
-    -lcurl
     -lcrypto
     #    ${YAML_CPP_LDFLAGS}
     #    ${TTCN3_LDFLAGS}
