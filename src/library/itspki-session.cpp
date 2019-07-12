@@ -329,11 +329,12 @@ ItsPkiSession::ItsRegisterResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING 
 		ERROR_STREAMC << "Invalid ITS registration response: no 'id' tag" << std::endl;
 		return false;
 	}
+#if 0
 	else if (its_id.find_first_not_of( "0123456789" ) != std::string::npos)   {
 		ERROR_STREAMC << "Invalid ITS registration response: invalid id: '" << its_id << "" << std::endl;
 		return false;
 	}
-
+#endif
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
 }
