@@ -812,7 +812,16 @@ ItsPkiEtsi::DecryptPayload(OCTETSTRING &in_raw, OCTETSTRING &payload)
         	EtsiTs103097Module::EtsiTs103097Data__Encrypted__My_decoder(in_raw, respDataEncrypted, "OER");
 	}
 	catch (const TC_Error& tc_error) {
-		ERROR_STREAMC << "cannot decode payload: " << oct2str(in_raw) << std::endl;
+		bool ascii = true;
+		for (int ii = 0; ii < 200 && ii < in_raw.lengthof(); ii++)   {
+			char ch = *((char *)(const unsigned char *)in_raw + ii);
+			if (!isascii((ch)))   {
+				ascii = false;
+				break;
+			}
+		}
+
+		ERROR_STREAMC << "cannot decode payload: " << (ascii ? (char *)((const unsigned char *)in_raw) : oct2str(in_raw)) << std::endl;
 		return false;
 	}
 
