@@ -809,7 +809,8 @@ ItsPkiEtsi::DecryptPayload(OCTETSTRING &in_raw, OCTETSTRING &payload)
         // { protocolVersion := 3, content := { encryptedData := { recipients := { { pskRecipInfo := ''O } }, ciphertext := { aes128ccm := { nonce := ''O, ccmCiphertext := ''O } } } } }
         EtsiTs103097Module::EtsiTs103097Data__Encrypted__My respDataEncrypted;
 	try   {
-        	EtsiTs103097Module::EtsiTs103097Data__Encrypted__My_decoder(in_raw, respDataEncrypted, "OER");
+		OCTETSTRING _in_raw = in_raw;
+        	EtsiTs103097Module::EtsiTs103097Data__Encrypted__My_decoder(_in_raw, respDataEncrypted, "OER");
 	}
 	catch (const TC_Error& tc_error) {
 		bool ascii = true;
