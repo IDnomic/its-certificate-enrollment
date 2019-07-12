@@ -652,7 +652,9 @@ ItsPkiSession::EcEnrollmentResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING
 	return true;
 }
 
-
+/*
+ * TODO: initialized sessionItsEcCert and sessionItsEcId have an impacto onto the not first EC enrollment
+ */
 bool
 ItsPkiSession::EcEnrollmentResponse_Parse(OCTETSTRING &response_raw)
 {
