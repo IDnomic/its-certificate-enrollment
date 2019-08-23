@@ -6,7 +6,6 @@
 #include <iterator>
 #include <iostream>
 #include <exception>
-// #include <boost/program_options.hpp>
 
 #include <openssl/objects.h>
 
@@ -39,6 +38,7 @@ private:
 	
 	OCTETSTRING sessionItsEcCert;
 	OCTETSTRING sessionItsEcId;
+	OCTETSTRING sessionItsAtCert;
 
 	std::string its_id;
 
@@ -50,6 +50,7 @@ private:
 	bool GetItsAtPublicEncryptionKey(IEEE1609dot2BaseTypes::PublicEncryptionKey &);
 
 	bool GetIEEE1609dot2Signature(ItsPkiInternalData &, OCTETSTRING &, OCTETSTRING &, void *, IEEE1609dot2BaseTypes::Signature &);
+	bool IEEE1609dot2_VerifySignedData(IEEE1609dot2::SignedData &signed_data, void *, IEEE1609dot2::SignedDataPayload &);
 
 public:
 	void *session_data = NULL;
@@ -66,6 +67,7 @@ public:
 	void *sessionGetItsAtEncryptionKey();
 	OCTETSTRING &sessionGetItsEcCert();
 	OCTETSTRING &sessionGetItsEcId();
+	OCTETSTRING &sessionGetItsAtCert() { return sessionItsAtCert; };
 
 	std::string sessionGetCanonicalId(ItsPkiInternalData &);
 	std::string sessionGetItsID() { return its_id; };
@@ -82,7 +84,6 @@ public:
 
 	bool ItsRegisterRequest_Create(ItsPkiInternalData &, OCTETSTRING &);
 	bool ItsRegisterResponse_Parse(OCTETSTRING &, OCTETSTRING &);
-	bool ItsRegisterResponse_SaveToFiles(ItsPkiInternalData &, OCTETSTRING &);
 
 	bool EcEnrollmentRequest_Create(ItsPkiInternalData &, OCTETSTRING &);
 	bool EcEnrollmentRequest_InnerEcRequest(ItsPkiInternalData &, EtsiTs102941TypesEnrolment::InnerEcRequest &);
@@ -91,16 +92,22 @@ public:
 	bool EcEnrollmentResponse_Parse(OCTETSTRING &);
 	bool EcEnrollmentResponse_Parse(OCTETSTRING &, OCTETSTRING &);
 	bool EcEnrollmentResponse_Status(OCTETSTRING &);
-	bool EcEnrollmentResponse_SaveToFiles(ItsPkiInternalData &, OCTETSTRING &);
+	bool EcEnrollmentRequest_Parse(OCTETSTRING &, void *, EtsiTs102941TypesEnrolment::InnerEcRequest &);
 
 	bool AtEnrollmentRequest_InnerAtRequest(ItsPkiInternalData &, OCTETSTRING &);
 	bool AtEnrollmentRequest_HeaderInfo(ItsPkiInternalData &, IEEE1609dot2::HeaderInfo &);
 	bool AtEnrollmentRequest_SignedExternalPayload(ItsPkiInternalData &, OCTETSTRING &, EtsiTs103097Module::EtsiTs103097Data__SignedExternalPayload &);
 	bool AtEnrollmentRequest_SignedExternalPayload(ItsPkiInternalData &, EtsiTs102941TypesAuthorization::SharedAtRequest &, EtsiTs103097Module::EtsiTs103097Data__SignedExternalPayload &);
 	bool AtEnrollmentRequest_POP(ItsPkiInternalData &, EtsiTs102941MessagesCa::EtsiTs102941Data &, EtsiTs103097Module::EtsiTs103097Data__Signed__My &);
+	bool AtEnrollmentRequest_Parse(OCTETSTRING &, void *, void *);
 	bool AtEnrollmentResponse_Parse(OCTETSTRING &, OCTETSTRING &);
 	bool AtEnrollmentResponse_Status(OCTETSTRING &);
-	bool AtEnrollmentResponse_SaveToFiles(ItsPkiInternalData &, OCTETSTRING &);
+
+	bool IEEE1609dot2_Sign(OCTETSTRING &, OCTETSTRING &, void *, OCTETSTRING &, OCTETSTRING &);
+	bool IEEE1609dot2_VerifyToBeEncoded(OCTETSTRING &, OCTETSTRING &, void *, OCTETSTRING &, OCTETSTRING &);
+	
+	bool IEEE1609dot2_VerifySignedData_C(IEEE1609dot2::SignedData &signed_data, void *, IEEE1609dot2::Ieee1609Dot2Content &);
+	bool IEEE1609dot2_VerifySignedData_H(IEEE1609dot2::SignedData &signed_data, void *, IEEE1609dot2::HashedData &);
 };
 
 

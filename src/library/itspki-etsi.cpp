@@ -250,9 +250,25 @@ ItsPkiEtsi::ItsPkiPublicKey::GetCompressed(OCTETSTRING &ret)
 }
 
 
+#if 0
+bool
+ItsPkiEtsi::ItsPkiRecipient::setupForDecrypt(void *prvkey, void *pubkey)
+{
+	DEBUGC_STREAM_CALLED;
+
+	e_prvkey = prvkey;
+	sender_e_pubkey = pubkey;
+
+	DEBUGC_STREAM_RETURNS_OK;
+	return true;
+}
+#endif
+
 bool
 ItsPkiEtsi::ItsPkiRecipient::GetCertHash(OCTETSTRING &r_hash)
 {
+	DEBUGC_STREAM_CALLED;
+	
 	if (!cert_hash.is_present() || cert_hash.lengthof() == 0)   {
 		ERROR_STREAMC << "failed " << std::endl;
 		return false;
@@ -268,6 +284,8 @@ ItsPkiEtsi::ItsPkiRecipient::GetCertHash(OCTETSTRING &r_hash)
 bool
 ItsPkiEtsi::ItsPkiRecipient::GetHashedID8(OCTETSTRING &ret)
 {
+	DEBUGC_STREAM_CALLED;
+	
 	if (!hashed_id8.is_present() || hashed_id8.lengthof() == 0)
 		return false;
 
@@ -372,15 +390,34 @@ ItsPkiEtsi::~ItsPkiEtsi()
 
 
 bool
-ItsPkiEtsi::setup_encryptFor(IEEE1609dot2::CertificateBase &cert)
+// ItsPkiEtsi::setRecipient(IEEE1609dot2::CertificateBase &cert, void *e_prvkey)
+ItsPkiEtsi::setRecipient(OCTETSTRING &cert_blob, void *e_prvkey)
 {
 	DEBUGC_STREAM_CALLED;
-	
+
+	IEEE1609dot2::CertificateBase cert = decEtsiTs103097Certificate(cert_blob);
+	dump_ttcn_object(cert, "recipient certificate: ");
+
 	if (!recipient.ParseCert(cert))   {
 		ERROR_STREAMC << "cannot parse recipient certificate" << std::endl;
 		return false;
 	}
+	if (e_prvkey)
+		recipient.SetPrivateKey(e_prvkey);
 	ready = true;
+
+	DEBUGC_STREAM_RETURNS_OK;
+	return true;
+}
+
+
+bool
+ItsPkiEtsi::setDecryptContext(void *prvkey, void *pubkey)
+{
+	DEBUGC_STREAM_CALLED;
+
+	recipient.SetPrivateKey(prvkey);
+	recipient.SetSenderPublicKey(pubkey);
 
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
@@ -421,6 +458,24 @@ ItsPkiEtsi::ItsPkiPrivateKey::setup(int in_nid, const char *prvkey_str)
 	dump_ttcn_object(pubkey.comp_key, "PrvKey CompPubKey: ");
 	dump_ttcn_object(pubkey.comp_key_mode, "PrvKey CompPubKeyMode: ");
 	DEBUGC_STREAM << "PrvKey NID:" <<  pubkey.nid << std::endl;
+
+	DEBUGC_STREAM_RETURNS_OK;
+	return true;
+}
+
+
+bool
+ItsPkiEtsi::ItsPkiPrivateKey::setup(void *in_key, OCTETSTRING &in_enc_skey)
+{
+	DEBUGC_STREAM_CALLED;
+
+	if (EC_KEY_check_key((EC_KEY *)in_key) == 0)    {
+		ERROR_STREAMC << "not valid EC key" << std::endl;
+		return false;
+	}
+	ec_key = in_key;
+
+	enc_skey = in_enc_skey;
 
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
@@ -507,6 +562,7 @@ ItsPkiEtsi::ItsPkiPrivateKey::decryptAes128ccm(IEEE1609dot2::AesCcmCiphertext &a
 	
 	OCTETSTRING ctext(aes128ccm.ccmCiphertext().lengthof() - tag_len, (const unsigned char *)aes128ccm.ccmCiphertext());
 
+	dump_ttcn_object(aes_skey, "AES SKey: ");
 	if (!OpenSSL_Decrypt_aes128ccm(ctext, tag, aes128ccm.nonce(), aes_skey, ret))   {
 		ERROR_STREAMC << "AES-128-CCM decrypt error" << std::endl;
 		return false;
@@ -532,9 +588,6 @@ ItsPkiEtsi::ItsPkiPrivateKey::derivate(const OCTETSTRING &x, const OCTETSTRING &
 		ERROR_STREAMC << "Cannot derivate SKey" << std::endl;
 		return false;
 	}
-	dump_ttcn_object(tag, "Tag: ");
-	dump_ttcn_object(aes_skey, "AES SKey: ");
-	dump_ttcn_object(enc_skey, "Enc AES SKey: ");
 
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
@@ -696,7 +749,8 @@ ItsPkiEtsi::ItsPkiPrivateKey::encrypt(const OCTETSTRING &msg, IEEE1609dot2::Symm
 
 
 bool
-ItsPkiEtsi::EncryptPayload(IEEE1609dot2::CertificateBase &cert, OCTETSTRING &tbe, EtsiTs103097Module::EtsiTs103097Data__Encrypted__My &ret)
+// ItsPkiEtsi::EncryptPayload(IEEE1609dot2::CertificateBase &__cert, OCTETSTRING &tbe, EtsiTs103097Module::EtsiTs103097Data__Encrypted__My &ret)
+ItsPkiEtsi::EncryptPayload(OCTETSTRING &tbe, EtsiTs103097Module::EtsiTs103097Data__Encrypted__My &ret)
 {
 	DEBUGC_STREAM_CALLED;
 	
@@ -713,6 +767,7 @@ ItsPkiEtsi::EncryptPayload(IEEE1609dot2::CertificateBase &cert, OCTETSTRING &tbe
                 ERROR_STREAMC << "failed to generate encryption key" << std::endl;
 		return false;
 	}
+
 #endif
 
 	OCTETSTRING r_enc_pubkey_x, r_enc_pubkey_y;
@@ -807,10 +862,10 @@ ItsPkiEtsi::DecryptPayload(OCTETSTRING &in_raw, OCTETSTRING &payload)
 	}
 
         // { protocolVersion := 3, content := { encryptedData := { recipients := { { pskRecipInfo := ''O } }, ciphertext := { aes128ccm := { nonce := ''O, ccmCiphertext := ''O } } } } }
-        EtsiTs103097Module::EtsiTs103097Data__Encrypted__My respDataEncrypted;
+        EtsiTs103097Module::EtsiTs103097Data__Encrypted__My data_encrypted;
 	try   {
 		OCTETSTRING _in_raw = in_raw;
-        	EtsiTs103097Module::EtsiTs103097Data__Encrypted__My_decoder(_in_raw, respDataEncrypted, "OER");
+        	EtsiTs103097Module::EtsiTs103097Data__Encrypted__My_decoder(_in_raw, data_encrypted, "OER");
 	}
 	catch (const TC_Error& tc_error) {
 		bool ascii = true;
@@ -826,30 +881,121 @@ ItsPkiEtsi::DecryptPayload(OCTETSTRING &in_raw, OCTETSTRING &payload)
 		return false;
 	}
 
-        if (!respDataEncrypted.is_bound()) {
+	return DecryptPayload(data_encrypted, payload);
+}
+
+
+bool
+ItsPkiEtsi::DecryptPayload(EtsiTs103097Module::EtsiTs103097Data__Encrypted__My &data_encrypted, OCTETSTRING &payload)
+{
+	DEBUGC_STREAM_CALLED;
+	
+        // { protocolVersion := 3, content := { encryptedData := { recipients := { { pskRecipInfo := ''O } }, ciphertext := { aes128ccm := { nonce := ''O, ccmCiphertext := ''O } } } } }
+	if (!ready)   {
+                ERROR_STREAMC << "error: etsi service is not properly initialized" << std::endl;
+		return false;
+	}
+
+        if (!data_encrypted.is_bound()) {
                 ERROR_STREAMC << "cannot decode response encrypted data" << std::endl;
                 return false;
         }
-        dump_ttcn_object(respDataEncrypted, "EtsiTs103097Module::EtsiTs103097Data__Encrypted__My response: ");
+        dump_ttcn_object(data_encrypted, "EtsiTs103097Module::EtsiTs103097Data__Encrypted__My response: ");
 
-        if (!respDataEncrypted.content().ischosen(IEEE1609dot2::Ieee1609Dot2Content::ALT_encryptedData))   {
-                ERROR_STREAMC << "'"<< respDataEncrypted.content().get_selection() << "' content type instead of expected 'ALT_encryptedData'" << std::endl;
+        if (!data_encrypted.content().ischosen(IEEE1609dot2::Ieee1609Dot2Content::ALT_encryptedData))   {
+                ERROR_STREAMC << "'"<< data_encrypted.content().get_selection() << "' content type instead of expected 'ALT_encryptedData'" << std::endl;
                 return false;
         }
 
-        IEEE1609dot2::RecipientInfo recipient = respDataEncrypted.content().encryptedData().recipients()[0];
-        if (!recipient.ischosen(IEEE1609dot2::RecipientInfo::ALT_pskRecipInfo))  {
-                ERROR_STREAMC << "'" << recipient.get_selection() << "' recipient type, instead of expected 'ALT_pskRecipInfo'" << std::endl;
+        IEEE1609dot2::RecipientInfo rinfo = data_encrypted.content().encryptedData().recipients()[0];
+	if (rinfo.ischosen(IEEE1609dot2::RecipientInfo::ALT_certRecipInfo))   {
+		if (recipient.GetPrivateKey() == NULL)   {
+                	ERROR_STREAMC << "No recipient private key" << std::endl;
+                	return false;
+		}
+
+		OCTETSTRING recipient_id;
+		if (!this->recipient.GetHashedID8(recipient_id))   {
+                	ERROR_STREAMC << "Cannot get HashedID " << std::endl;
+                	return false;
+		}
+
+		if (recipient_id != rinfo.certRecipInfo().recipientId())   {
+			ERROR_STREAMC << "No recipient with id '" << oct2str(recipient_id) << std::endl;
+			return false;
+		}
+		
+		int nid;
+		IEEE1609dot2BaseTypes::EciesP256EncryptedKey ecies_key;
+		if (rinfo.certRecipInfo().encKey().ischosen(IEEE1609dot2::EncryptedDataEncryptionKey::ALT_eciesNistP256)) {
+			ecies_key = rinfo.certRecipInfo().encKey().eciesNistP256();
+			nid = NID_X9_62_prime256v1;
+		}
+				                
+		else if (rinfo.certRecipInfo().encKey().ischosen(IEEE1609dot2::EncryptedDataEncryptionKey::ALT_eciesBrainpoolP256r1)) {
+			ecies_key = rinfo.certRecipInfo().encKey().eciesBrainpoolP256r1();
+			nid = NID_brainpoolP256r1;
+		}
+		else {
+			ERROR_STREAMC << "Unsupported type of ECIES encrypted key " << std::endl;
+			return false;
+		}
+
+        	OCTETSTRING comp, x, y;
+        	int y_bit = -1;
+        	if (ecies_key.v().ischosen(IEEE1609dot2BaseTypes::EccP256CurvePoint::ALT_uncompressedP256)) {
+                	x = ecies_key.v().uncompressedP256().x();
+                	y = ecies_key.v().uncompressedP256().y();
+        	}
+        	else if (ecies_key.v().ischosen(IEEE1609dot2BaseTypes::EccP256CurvePoint::ALT_compressed__y__0))   {
+                	comp = ecies_key.v().compressed__y__0();
+                	y_bit = 0;
+
+                	if (!ECKey_DecompressPublicKey(nid, comp, 0, x, y))   {
+                        	ERROR_STREAMC << "Cannot decompress EC PublicKey" << std::endl;
+                        	return false;
+                	}
+        	}
+        	else if (ecies_key.v().ischosen(IEEE1609dot2BaseTypes::EccP256CurvePoint::ALT_compressed__y__1))   {
+                	comp = ecies_key.v().compressed__y__1();
+                	y_bit = 1;
+                	if (!ECKey_DecompressPublicKey(nid, comp, 1, x, y))   {
+                        	ERROR_STREAMC << "Cannot decompress EC PublicKey" << std::endl;
+                        	return false;
+                	}
+        	}
+        	else   {
+                	ERROR_STREAMC << "Unsupported EC key form" << std::endl;
+                	return false;
+        	}
+        	dump_ttcn_object(x, "Sender X: ");
+        	dump_ttcn_object(y, "Sender Y: ");
+
+		OCTETSTRING salt;
+		if (!recipient.GetCertHash(salt))   {
+                	ERROR_STREAMC << "Failed to get certificate hash " << std::endl;
+                	return false;
+		}
+
+		enc_key.setup(recipient.GetPrivateKey(), ecies_key.c());
+		if (!enc_key.derivate(x, y, salt))   {
+                	ERROR_STREAMC << "Cannot derivate " << std::endl;
+                	return false;
+		}
+	}
+	else if (rinfo.ischosen(IEEE1609dot2::RecipientInfo::ALT_pskRecipInfo))  {
+        	OCTETSTRING skey_id = rinfo.pskRecipInfo();
+        	if (!setup_decrypt(skey_id))   {
+                	ERROR_STREAMC << "cannot setup decrypt context" << std::endl;
+                	return false;
+        	}
+	}
+	else   {
+                ERROR_STREAMC << "'" << rinfo.get_selection() << "' recipient type, instead of expected 'ALT_pskRecipInfo'" << std::endl;
                 return false;
         }
 
-        OCTETSTRING skey_id = recipient.pskRecipInfo();
-        if (!setup_decrypt(skey_id))   {
-                ERROR_STREAMC << "cannot setup decrypt context" << std::endl;
-                return false;
-        }
-
-        IEEE1609dot2::AesCcmCiphertext aes128ccm = respDataEncrypted.content().encryptedData().ciphertext().aes128ccm();
+        IEEE1609dot2::AesCcmCiphertext aes128ccm = data_encrypted.content().encryptedData().ciphertext().aes128ccm();
         dump_ttcn_object(aes128ccm, "IEEE1609dot2::AesCcmCiphertext: ");
 
         if (!enc_key.decryptAes128ccm(aes128ccm, payload))   {

@@ -323,7 +323,7 @@ ECKey_PublicKeyHashedID(void *key, OCTETSTRING &ret)
 
 
 bool
-OpenSSL_Sign(const EVP_MD *evp_md, const unsigned char *data, int data_len, void *key, unsigned char **out, size_t *out_len)
+OpenSSL_Sign(const unsigned char *data, int data_len, void *key, unsigned char **out, size_t *out_len)
 {
 	if (out == NULL || out_len == NULL)
 		return false;
@@ -333,42 +333,11 @@ OpenSSL_Sign(const EVP_MD *evp_md, const unsigned char *data, int data_len, void
 		return false;
 	}
 
-	EVP_PKEY *evp_pkey = EVP_PKEY_new();
-	if (!evp_pkey)
+	ECDSA_SIG *signature = ECDSA_do_sign(data, data_len, (EC_KEY *)key);
+	if (signature == NULL)
 		return false;
 
-	EVP_PKEY_set1_EC_KEY(evp_pkey, (EC_KEY *)key);
-
-	EVP_PKEY_CTX *evp_pkey_ctx = EVP_PKEY_CTX_new(evp_pkey, NULL);
-	if (!evp_pkey_ctx)
-		return false;
-
-	if (EVP_PKEY_sign_init(evp_pkey_ctx) <= 0)
-		return false;
-	if (evp_md != NULL)
-		if (EVP_PKEY_CTX_set_signature_md(evp_pkey_ctx, evp_md) <= 0)
-			return false;
-
-	size_t siglen;
- 	if (EVP_PKEY_sign(evp_pkey_ctx, NULL, &siglen, data, data_len) <= 0)
-		return false;
-
-	unsigned char *sig = (unsigned char *)OPENSSL_malloc(siglen);
-	if (!sig)
-		return false;
-
-	if (EVP_PKEY_sign(evp_pkey_ctx, sig, &siglen, data, data_len) <= 0)
-		return false;
-		
-	ECDSA_SIG *signature = ECDSA_SIG_new();
-	if (!signature)
-		return false;
-
-	const unsigned char *p = sig;
-	if (d2i_ECDSA_SIG(&signature, &p, siglen) == NULL)
-		return false;
-
-	const BIGNUM *sig_r, *sig_s;
+	const BIGNUM *sig_r = NULL, *sig_s = NULL;
 	ECDSA_SIG_get0(signature, &sig_r, &sig_s);
 
         /* Store the two BIGNUMs in raw_buf. */
@@ -389,11 +358,7 @@ OpenSSL_Sign(const EVP_MD *evp_md, const unsigned char *data, int data_len, void
 	*out = raw_buf;
 	*out_len = buf_len;
 
-	OPENSSL_free(sig);
 	ECDSA_SIG_free(signature);
-	EVP_PKEY_CTX_free(evp_pkey_ctx);
-	EVP_PKEY_free(evp_pkey);
-
 	return true;
 }
 
@@ -422,6 +387,126 @@ OpenSSL_SHA384_HashedID(OCTETSTRING &data, OCTETSTRING &ret)
 		return false;
 						                       
 	ret = OCTETSTRING(8, sha + SHA384_DIGEST_LENGTH - 8);
+	return true;
+}
+
+
+bool
+OpenSSL_Verify(void *key, OCTETSTRING &r, OCTETSTRING &s, OCTETSTRING &data)
+{
+	if (EC_KEY_check_key((EC_KEY *)key) == 0) {
+		ERROR_STREAM << "invalid EC key" << std::endl;
+		return false;
+	}
+
+	BIGNUM *sig_r = BN_bin2bn ((const unsigned char *)r, r.lengthof(), NULL);
+	BIGNUM *sig_s = BN_bin2bn ((const unsigned char *)s, s.lengthof(), NULL);
+	
+	ECDSA_SIG *signature = ECDSA_SIG_new();
+	if (signature == NULL)
+		return false;
+	ECDSA_SIG_set0(signature, sig_r, sig_s);
+
+	int ret = ECDSA_do_verify((const unsigned char *)data, data.lengthof(), signature, (EC_KEY *)key);
+
+	ECDSA_SIG_free(signature);
+	return (ret == 1);
+}
+
+
+bool 
+IEEE1609dot2_VerifyWithSha256(void *key, OCTETSTRING &r, OCTETSTRING &s, OCTETSTRING &data, OCTETSTRING &signer)
+{
+        unsigned char buff[SHA256_DIGEST_LENGTH * 2] = {0};
+        unsigned char final_hash[SHA256_DIGEST_LENGTH] = {0};
+        unsigned char *sha = &buff[0];
+        size_t sha_len = SHA256_DIGEST_LENGTH * 2;
+        const unsigned char *signer_ptr = NULL;
+        size_t signer_len = 0;
+
+        DEBUG_STREAM_CALLED;
+
+        dump_ttcn_object(r, "R: ");
+        dump_ttcn_object(s, "S: ");
+        dump_ttcn_object(data, "Data: ");
+        dump_ttcn_object(signer, "Signer: ");
+        
+	if (signer.is_present() && signer.lengthof() > 0)   {
+                signer_ptr = (const unsigned char *)signer;
+                signer_len = signer.lengthof();
+        }
+
+        if (SHA256((const unsigned char *)data, data.lengthof(), sha) != sha)   {
+                ERROR_STREAM << "sha256 on data failed" << std::endl;
+                return false;
+        }
+        OCTETSTRING first_hash(SHA256_DIGEST_LENGTH, sha);
+        dump_ttcn_object(first_hash, "First Hash: ");
+
+        if (SHA256(signer_ptr, signer_len, sha + SHA256_DIGEST_LENGTH) != (sha + SHA256_DIGEST_LENGTH))   {
+                ERROR_STREAM << "sha256 failed" << std::endl;
+                return false;
+        }
+        OCTETSTRING second_hash(SHA256_DIGEST_LENGTH, sha + SHA256_DIGEST_LENGTH);
+        dump_ttcn_object(second_hash, "Second Hash: ");
+
+        if (SHA256(sha, sha_len, final_hash) != final_hash)   {
+                ERROR_STREAM << "sha256 failed" << std::endl;
+                return false;
+        }
+        OCTETSTRING fhash(SHA256_DIGEST_LENGTH, final_hash);
+        dump_ttcn_object(fhash, "Final Hash: ");
+
+        if (!OpenSSL_Verify(key, r, s, fhash))   {
+                ERROR_STREAM << "Verify failed ..." << std::endl;
+                return false;
+        }
+	
+	DEBUG_STREAM_RETURNS_OK;
+	return true;
+}
+
+
+bool 
+IEEE1609dot2_VerifyWithSha384(void *key, OCTETSTRING &r, OCTETSTRING &s, OCTETSTRING &data, OCTETSTRING &signer)
+{
+        unsigned char buff[SHA384_DIGEST_LENGTH * 2] = {0};
+        unsigned char final_hash[SHA384_DIGEST_LENGTH] = {0};
+        unsigned char *sha = &buff[0];
+        size_t sha_len = SHA384_DIGEST_LENGTH * 2;
+        const unsigned char *signer_ptr = NULL;
+        size_t signer_len = 0;
+
+        DEBUG_STREAM_CALLED;
+
+        if (signer.is_present() && signer.lengthof() > 0)   {
+                signer_ptr = (const unsigned char *)signer;
+                signer_len = signer.lengthof();
+        }
+
+        if (SHA384((const unsigned char *)data, data.lengthof(), sha) != sha)   {
+                ERROR_STREAM << "sha384 on data failed" << std::endl;
+                return false;
+        }
+
+        if (SHA384(signer_ptr, signer_len, sha + SHA384_DIGEST_LENGTH) != (sha + SHA384_DIGEST_LENGTH))   {
+                ERROR_STREAM << "sha384 failed" << std::endl;
+                return false;
+        }
+
+        if (SHA384(sha, sha_len, final_hash) != final_hash)   {
+                ERROR_STREAM << "sha384 failed" << std::endl;
+                return false;
+        }
+        OCTETSTRING fhash(SHA384_DIGEST_LENGTH, final_hash);
+        dump_ttcn_object(fhash, "Final Hash: ");
+
+        if (!OpenSSL_Verify(key, r, s, fhash))   {
+                ERROR_STREAM << "Verify failed ..." << std::endl;
+                return false;
+        }
+	
+	DEBUG_STREAM_RETURNS_OK;
 	return true;
 }
 
@@ -555,26 +640,33 @@ IEEE1609dot2_SignWithSha256(OCTETSTRING &data, OCTETSTRING &signer, void *key,
 		signer_ptr = (const unsigned char *)signer;
 		signer_len = signer.lengthof();
 	}
-	DEBUG_STREAM << "data-len:" << data.lengthof() << ", signer-len:" << signer_len << std::endl;
+	DEBUG_STREAM << "key: " << key << "; data-len:" << data.lengthof() << ", signer-len:" << signer_len << std::endl;
 
 	if (SHA256((const unsigned char *)data, data.lengthof(), sha) != sha)   {
 		ERROR_STREAM << "sha256 failed" << std::endl;
 		return false;
 	}
+        OCTETSTRING first_hash(SHA256_DIGEST_LENGTH, sha);
+	dump_ttcn_object(first_hash, "First hash: ");
 
 	if (SHA256(signer_ptr, signer_len, sha + SHA256_DIGEST_LENGTH) != (sha + SHA256_DIGEST_LENGTH))   {
 		ERROR_STREAM << "sha256 failed" << std::endl;
 		return false;
 	}
+        OCTETSTRING second_hash(SHA256_DIGEST_LENGTH, sha + SHA256_DIGEST_LENGTH);
+	dump_ttcn_object(second_hash, "First hash: ");
 
 	if (SHA256(sha, sha_len, final_hash) != final_hash)   {
 		ERROR_STREAM << "sha256 failed" << std::endl;
 		return false;
 	}
+        OCTETSTRING fhash(SHA256_DIGEST_LENGTH, final_hash);
+	dump_ttcn_object(fhash, "Final hash: ");
+
 
         unsigned char *sig = NULL;
         size_t sig_len = 0;
-	if (!OpenSSL_Sign(NULL, final_hash, SHA256_DIGEST_LENGTH, key, &sig, &sig_len))   {
+	if (!OpenSSL_Sign(final_hash, SHA256_DIGEST_LENGTH, key, &sig, &sig_len))   {
 		ERROR_STREAM << "OpenSSL sign failed" << std::endl;
 		return false;
 	}
@@ -626,7 +718,7 @@ IEEE1609dot2_SignWithSha384(OCTETSTRING &data, OCTETSTRING &signer,
 
         unsigned char *sig = NULL;
         size_t sig_len = 0;
-	if (!OpenSSL_Sign(NULL, final_hash, SHA384_DIGEST_LENGTH, key, &sig, &sig_len))   {
+	if (!OpenSSL_Sign(final_hash, SHA384_DIGEST_LENGTH, key, &sig, &sig_len))   {
 		ERROR_STREAM << "OpenSSL sign failed" << std::endl;
 		return false;
 	}
@@ -979,6 +1071,14 @@ ECKey_DerivateSKey_aes128ccm(void *in_eckey,
 		return false;
 	}
 
+#ifdef ITS_PKI_DEBUG
+	int prvkey_nid = 0;
+	OCTETSTRING prvkey_x, prvkey_y;
+	ECKey_GetPublicKeyComponents(ec_key, prvkey_nid, prvkey_x, prvkey_y);
+	dump_ttcn_object(prvkey_x, "Private key X: ");
+	dump_ttcn_object(prvkey_y, "Private key Y: ");
+#endif
+
 	const EC_GROUP *ec_group = EC_KEY_get0_group(ec_key);
 	int nid = EC_GROUP_get_curve_name(ec_group);
 	OCTETSTRING shared_skey = int2oct(0, (EC_GROUP_get_degree(ec_group) + 7) / 8);
@@ -1029,17 +1129,22 @@ ECKey_DerivateSKey_aes128ccm(void *in_eckey,
 	OCTETSTRING k1(k_enc_len, (const unsigned char *)digest);
 	dump_ttcn_object(k1, "K1: ");
 
-  	if (!aes_skey.is_bound()) {
+  	if (enc_skey.is_bound() && enc_skey.lengthof() > 0) {
+		aes_skey = k1 ^ enc_skey;
+		dump_ttcn_object(aes_skey, "Decrypted AES SKey: ");
+	}
+	else   {
 		BIGNUM *bn = BN_new();
     		BN_pseudo_rand(bn, k_enc_len * 8, -1, 0);
     		aes_skey = int2oct(0, k_enc_len);
     		BN_bn2bin(bn, (unsigned char*)((const unsigned char *)aes_skey));
 		BN_free(bn);
+		dump_ttcn_object(aes_skey, "Generated AES SKey: ");
+
+		enc_skey = k1 ^ aes_skey;
+		dump_ttcn_object(enc_skey, "Encrypted AES SKey: ");
 	}
 
-	enc_skey = k1 ^ aes_skey;
-	dump_ttcn_object(enc_skey, "Enc AES SKey: ");
-  
 	// Extract K2 and generate Tag vector
 	OCTETSTRING k2(k_enc_len * 2, k_enc_len + (const unsigned char *)digest);
 	dump_ttcn_object(k2, "K2: ");
@@ -1048,9 +1153,8 @@ ECKey_DerivateSKey_aes128ccm(void *in_eckey,
 		ERROR_STREAM << "tag HMAC SHA256 failed" << std::endl;
 		return false;
 	}
+	dump_ttcn_object(tag, "Tag: ");
  
 	DEBUG_STREAM_RETURNS_OK;
 	return true;
 }
-
-

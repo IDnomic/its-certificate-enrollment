@@ -47,12 +47,7 @@ private:
 	std::string profile;
 	
 	IEEE1609dot2BaseTypes::SequenceOfPsidSsp ec_ssp_seq;
-	// struct PsidSsp *ec_psid_ssp = NULL;
-	// size_t ec_psid_ssp_num = 0;
 	IEEE1609dot2BaseTypes::SequenceOfPsidSsp at_ssp_seq;
-	// struct PsidSsp *at_psid_ssp = NULL;
-	// size_t at_psid_ssp_num = 0;
-
 
 	IEEE1609dot2BaseTypes::HashAlgorithm::enum_type hash_algorithm = IEEE1609dot2BaseTypes::HashAlgorithm::sha256;
 	
@@ -75,10 +70,6 @@ private:
 	std::string itsEcEncryptionKeyFile;
 	bool itsNeedEcEnrollment = false;
 	
-	std::string itsEcCertSave2File;
-	std::string itsEcVerificationKeySave2File;
-	std::string itsEcEncryptionKeySave2File;
-
 	OCTETSTRING itsAtCert_blob;
 	OCTETSTRING itsAtId;
 	void *itsAtVerificationKey = NULL;
@@ -89,26 +80,15 @@ private:
 	std::string itsAtVerificationKeyFile;
 	std::string itsAtEncryptionKeyFile;
 
-	std::string itsAtCertSave2File;
-	std::string itsAtVerificationKeySave2File;
-	std::string itsAtEncryptionKeySave2File;
-
 	std::string hexeaid;
 	OCTETSTRING eaId;
 	OCTETSTRING eaCert_blob;
-	void *eaEncryptionKey = NULL;
-	void *eaVerificationKey = NULL;
 
 	std::string hexaaid;
 	OCTETSTRING aaId;
 	OCTETSTRING aaCert_blob;
-	void *aaEncryptionKey = NULL;
-	void *aaVerificationKey = NULL;
 
 	void init();
-
-	bool setEncryptionKey(OCTETSTRING &, void **);
-	// bool getCertId(OCTETSTRING &, OCTETSTRING &);
 
 	bool CheckEnrollmentDataEA();
 	bool CheckEnrollmentDataAA();
@@ -177,30 +157,6 @@ public:
 
 	bool SetEAEncryptionKey(OCTETSTRING &);
 
-	bool SetItsEcCertSave2File(std::string file_name) {
-		itsEcCertSave2File = file_name;
-       		return true;
-	};
-	std::string &GetItsEcCertSave2File() {
-		return itsEcCertSave2File;
-	};
-
-	bool SetItsEcVerificationKeySave2File(std::string file_name) {
-		itsEcVerificationKeySave2File = file_name;
-       		return true;
-	};
-	std::string &GetItsEcVerificationKeySave2File() {
-		return itsEcVerificationKeySave2File;
-	};
-	
-	bool SetItsEcEncryptionKeySave2File(std::string file_name) {
-		itsEcEncryptionKeySave2File = file_name;
-       		return true;
-	};
-	std::string &GetItsEcEncryptionKeySave2File() {
-		return itsEcEncryptionKeySave2File;
-	};
-
 	void SetItsAtVerificationKey(void *key) {
 		itsAtVerificationKey = key;
 	};
@@ -222,37 +178,9 @@ public:
 		return itsAtEncryptionKeyEnable;
 	}
 
-
-
-
 	bool SetAAEncryptionKey(OCTETSTRING &);
 
 	bool SetItsEcId(OCTETSTRING &);
-
-	bool SetItsAtCertSave2File(std::string file_name) {
-		itsAtCertSave2File = file_name;
-       		return true;
-	};
-	std::string &GetItsAtCertSave2File() {
-		return itsAtCertSave2File;
-	};
-
-	bool SetItsAtVerificationKeySave2File(std::string file_name) {
-		itsAtVerificationKeySave2File = file_name;
-       		return true;
-	};
-	std::string &GetItsAtVerificationKeySave2File() {
-		return itsAtVerificationKeySave2File;
-	};
-	
-	bool SetItsAtEncryptionKeySave2File(std::string file_name) {
-		itsAtEncryptionKeySave2File = file_name;
-       		return true;
-	};
-	std::string &GetItsAtEncryptionKeySave2File() {
-		return itsAtEncryptionKeySave2File;
-	};
-
 	bool IsItsRegistrationNeeded() { return itsNeedRegistration; };
 	void SetItsRegistrationFlag(bool needed) { itsNeedRegistration = needed; };
 	
@@ -263,27 +191,15 @@ public:
 	bool CheckEcEnrollmentArguments();
 	bool CheckAtEnrollmentArguments();
 
-	bool IEEE1609dot2_Sign(OCTETSTRING &, OCTETSTRING &, void *, OCTETSTRING &, OCTETSTRING &);
+	OCTETSTRING &GetEAId() { return eaId; };
+	OCTETSTRING &GetEACertBlob() { return eaCert_blob; };
+	OCTETSTRING &GetAAId() { return aaId; };
+	OCTETSTRING &GetAACertBlob() { return aaCert_blob; };
+	OCTETSTRING &GetItsEcId() { return itsEcId; };
+	OCTETSTRING &GetItsEcCertBlob() { return itsEcCert_blob; };
 
-	OCTETSTRING &GetEAId() {
-		return eaId;
-	};
-	OCTETSTRING &GetEACertBlob() {
-		return eaCert_blob;
-	};
-
-	OCTETSTRING &GetAACertBlob() {
-		return aaCert_blob;
-	};
-
-	OCTETSTRING &GetItsEcId() {
-		return itsEcId;
-	};
-	OCTETSTRING &GetItsEcCertBlob() {
-		return itsEcCert_blob;
-	};
-
-	std::string saveTechnicalKeyFile;
+	bool getEncryptionKeyFromCertificate(OCTETSTRING &, void **);
+	bool getVerificationKeyFromCertificate(OCTETSTRING &, void **);
 
 	int debug = 0;
 };

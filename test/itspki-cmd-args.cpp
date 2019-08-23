@@ -77,7 +77,7 @@ ItsPkiCmdArguments::ValidateOperation(void)
 		this->last_error_str = "missing ITS certificate as an input for the 'text' operation ('in', 'ea-cert', 'aa-cert', 'ea-cert-b64' or 'aa-cert-b64')";
 	}
 	else if (this->IsCmdItsRegister())   {
-		if (this->cmd_vm.count("profile"))
+		if (this->cmd_vm.count("profile") || profile.length() > 0)
 			return true;
 		this->last_error_str = "'Profile' is mandatory option for this operation";
 	}
@@ -95,6 +95,8 @@ ItsPkiCmdArguments::ValidateOperation(void)
 bool
 ItsPkiCmdArguments::init()
 {
+	keep_its =		!getEnvVar(PKIITS_CMDARG_KEEP_ITS).empty();
+	user_password =		getEnvVar(PKIITS_CMDARG_USER_PASSWORD);
 	url_ea =		getEnvVar(PKIITS_CMDARG_URL_EA);
 	url_aa =		getEnvVar(PKIITS_CMDARG_URL_AA);
 	url_its =		getEnvVar(PKIITS_CMDARG_URL_ITS);
@@ -104,18 +106,36 @@ ItsPkiCmdArguments::init()
 	aacert_b64 =		getEnvVar(PKIITS_CMDARG_AA_CERT);
 	its_tkey_b64 =		getEnvVar(PKIITS_CMDARG_ITS_TKEY);
 	its_ec_cert_b64 =	getEnvVar(PKIITS_CMDARG_ITS_EC_CERT);
-	its_ec_vkey_b64 =		getEnvVar(PKIITS_CMDARG_ITS_EC_VKEY);
-	its_ec_ekey_b64 =		getEnvVar(PKIITS_CMDARG_ITS_EC_EKEY);
+	its_ec_vkey_b64 =	getEnvVar(PKIITS_CMDARG_ITS_EC_VKEY);
+	its_ec_ekey_b64 =	getEnvVar(PKIITS_CMDARG_ITS_EC_EKEY);
 	its_ec_ekey_enable =   !getEnvVar(PKIITS_CMDARG_ITS_EC_EKEY_ENABLE).empty();
 	its_at_cert_b64 =	getEnvVar(PKIITS_CMDARG_ITS_AT_CERT);
 	its_at_vkey_b64 =		getEnvVar(PKIITS_CMDARG_ITS_AT_VKEY);
 	its_at_ekey_b64 =		getEnvVar(PKIITS_CMDARG_ITS_AT_EKEY);
 	its_at_ekey_enable =   !getEnvVar(PKIITS_CMDARG_ITS_AT_EKEY_ENABLE).empty();
-	app_perms_ssp_bitmap =	getEnvVar(PKIITS_CMDARG_APP_PERMS_SSP_BITMAP);
+	its_need_to_register = !getEnvVar(PKIITS_CMDARG_ITS_NEED_TO_REGISTER).empty();
+	its_need_ec_enrollment =	!getEnvVar(PKIITS_CMDARG_ITS_NEED_EC_ENROLLMENT).empty();
 	its_canonical_id = 	getEnvVar(PKIITS_CMDARG_ITS_CANONICAL_ID);
+	ec_psidssp_seq =	getEnvVar(PKIITS_CMDARG_EC_PSIDSSP_SEQ);
+	at_psidssp_seq =	getEnvVar(PKIITS_CMDARG_AT_PSIDSSP_SEQ);
 
-	if (!getEnvVar(PKIITS_CMDARG_APP_PERMS_PSID).empty())
-		app_perms_psid = std::stol(getEnvVar(PKIITS_CMDARG_APP_PERMS_PSID));
+	std::cout << "Profile: " << profile << std::endl;
+	std::cout << "its_at_ekey_enable: " << its_at_ekey_enable << std::endl;
+
+	if(!getEnvVar(PKIITS_CMDARG_ITS_NAME_HEADER).empty())
+		its_name_header = getEnvVar(PKIITS_CMDARG_ITS_NAME_HEADER);
+	else
+		its_name_header = std::string("BENCH-ITSPKI-");
+
+	if (!getEnvVar(PKIITS_CMDARG_CYCLES_PER_THREAD).empty())
+		cycles_num = std::stol(getEnvVar(PKIITS_CMDARG_CYCLES_PER_THREAD));
+	if (cycles_num == 0)
+		cycles_num = INT_MAX;
+
+	if (!getEnvVar(PKIITS_CMDARG_THREADS).empty())
+		threads_num = std::stol(getEnvVar(PKIITS_CMDARG_THREADS));
+
+
 	return true;
 }
 
@@ -127,10 +147,12 @@ ItsPkiCmdArguments::ItsPkiCmdArguments(int argc, const char *argv[])
         try {
                 this->desc.add_options()
                         (CMD_ARGUMENT_COMMAND, po::value<ItsPkiCmdArguments::CmdOperation>(), "PKI ITS tool command <string>")
+			("keep-its", po::bool_switch(&this->keep_its)->default_value(keep_its), "Do not delete test ITSs")
                         ("in,i", po::value<std::string>()->notifier(notifier_on_input_file), "input file <string>")
 			("ssl-client-cert", po::value<std::string>(&this->ssl_client_cert), "Client TLS/SSL certificate in one line <base64 string>")
 			("ssl-client-key", po::value<std::string>(&this->ssl_client_key), "Client TLS/SSL key in one line <base64 string>")
 			("ssl-ca-chain", po::value<std::string>(&this->ssl_ca_chain), "TLS/SSL CA chain in one line <base64 string>")
+			("user-password", po::value<std::string>(&this->user_password), "User:Password to access ITS operator service")
 			("url-ea,H", po::value<std::string>(&this->url_ea), "URL of EA <URL string>")
 			("url-aa,U", po::value<std::string>(&this->url_aa), "URL of AA <URL string>")
 			("url-its,I", po::value<std::string>(&this->url_its), "URL of Registration Entity <URL string>")
@@ -142,6 +164,7 @@ ItsPkiCmdArguments::ItsPkiCmdArguments(int argc, const char *argv[])
 			("aa-cert-b64,a", po::value<std::string>(&this->aacert_b64), "AA certificate <base64 string>")
 			("its-tkey", po::value<std::string>(&this->its_tkey), "Technical Key <filename>")
 			("its-tkey-b64", po::value<std::string>(&this->its_tkey_b64), "Technical Key <base64 string>")
+			("its-need-to-register", po::bool_switch(&this->its_need_to_register)->default_value(its_need_to_register), "Register ITS before EC certificate request")
 			("its-ec-vkey", po::value<std::string>(&this->its_ec_vkey), "ITS EC verification key <filename>")
 			("its-ec-vkey-b64", po::value<std::string>(&this->its_ec_vkey_b64), "ITS EC verification key <filename>")
 			("its-ec-ekey",   po::value<std::string>(&this->its_ec_ekey), "ITS EC decryption key <filename>")
@@ -149,27 +172,23 @@ ItsPkiCmdArguments::ItsPkiCmdArguments(int argc, const char *argv[])
 			("its-ec-ekey-enable", po::bool_switch(&this->its_ec_ekey_enable)->default_value(its_ec_ekey_enable), "Include encryption key into EC certificate request")
 			("its-ec-cert", po::value<std::string>(&this->its_ec_certfile), "ITS EC certificate <filename>")
 			("its-ec-cert-b64", po::value<std::string>(&this->its_ec_cert_b64), "ITS EC certificate <base64 string>")
-			("its-ec-cert-save2file", po::value<std::string>(&this->its_ec_cert_save2file), "Save new ITS EC certificate to <filename>")
-			("its-ec-vkey-save2file", po::value<std::string>(&this->its_ec_vkey_save2file), "Save new ITS EC verification key to <filename>")
-			("its-ec-ekey-save2file", po::value<std::string>(&this->its_ec_ekey_save2file), "Save new ITS EC encryption key to <filename>")
+			("its-ec-save", po::bool_switch(&this->its_ec_save)->default_value(its_ec_save), "Save EC enrollment results (keys and certificate)")
+			("its-need-ec-enrollment", po::bool_switch(&this->its_need_ec_enrollment)->default_value(its_need_ec_enrollment), "EC enrollment needed (for AT operations)")
 			("its-at-vkey", po::value<std::string>(&this->its_at_vkey), "ITS AT verification key <filename>")
 			("its-at-ekey",   po::value<std::string>(&this->its_at_ekey), "ITS AT decryption key <filename>")
 			("its-at-ekey-enable", po::bool_switch(&this->its_at_ekey_enable)->default_value(its_at_ekey_enable), "Include encryption key into AT certificate request")
 			("its-at-cert", po::value<std::string>(&this->its_at_certfile), "ITS AT certificate <filename>")
 			("its-at-cert-b64", po::value<std::string>(&this->its_at_cert_b64), "ITS AT certificate <base64 string>")
-			("its-at-cert-save2file", po::value<std::string>(&this->its_at_cert_save2file), "Save new ITS AT certificate to <filename>")
-			("its-at-vkey-save2file", po::value<std::string>(&this->its_at_vkey_save2file), "Save new ITS AT verification key to <filename>")
-			("its-at-ekey-save2file", po::value<std::string>(&this->its_at_ekey_save2file), "Save new ITS AT encryption key to <filename>")
+			("its-at-save", po::bool_switch(&this->its_at_save)->default_value(its_at_save), "Save AT enrollment results (keys and certificate)")
 			("aid-ssp", po::value<std::string>(&this->hexitsaidssplist), "AID SSP <hexadecimal string>")
-			("app-perms-psid,p", po::value<long>(&this->app_perms_psid), "Application permissions: psid <int>")
-			("app-perms-ssp-opaque", po::value<std::string>(&this->app_perms_ssp_opaque), "Application permissions: ssp, type 'opaque' <hexadecimal string>")
-			("app-perms-ssp-bitmap", po::value<std::string>(&this->app_perms_ssp_bitmap), "Application permissions: ssp, type 'bitmap' <hexadecimal string>")
+			("ec-psidssp-seq", po::value<std::string>(&this->ec_psidssp_seq), "EC application permission sequence: <int:hex*?, >")
+			("at-psidssp-seq", po::value<std::string>(&this->at_psidssp_seq), "AT application permission sequence: <int:hex*?, >")
 			("validity-restrictions,r", po::value<std::string>(&this->hexvalidityrestrictions), "Validity restrictions <hexadecimal string>")
 			("its-name-header,n", po::value<std::string>(&this->its_name_header), "ITS name header <string>")
 			("canonical-id,c", po::value<std::string>(&this->its_canonical_id), "ITS canonical ID <string>")
 			("test-frequency,f", po::value<float>(&this->test_frequency), "Number of request per seconds  <float>")
-			("number-of-cycles", po::value<long>(&this->cycles_num)->default_value(0), "Number of tests <long>")
-			("number-of-threads", po::value<long>(&this->threads_num)->default_value(0), "Number of concurent threads <long>")
+			("number-of-cycles", po::value<long>(&this->cycles_num), "Number of tests <long>")
+			("number-of-threads", po::value<long>(&this->threads_num), "Number of concurent threads <long>")
 			(CMD_ARGUMENT_FORMAT, po::value<ItsPkiCmdArguments::OutputFormat>(), "Info output format <string>")
 			(CMD_ARGUMENT_HASH_ALGORITHM, po::value<ItsPkiCmdArguments::HashAlgorithmType>(), "Hash algorithm <string>")
                         ("help,h", "Help screen")

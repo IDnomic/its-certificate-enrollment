@@ -43,29 +43,6 @@ private:
 		bool GetXY(OCTETSTRING &_x, OCTETSTRING &_y);
 	};
 
-	class ItsPkiRecipient {
-	private:
-		std::string CLASS_NAME = std::string("ItsPkiEtsi::ItsPkiRecipient");
-		IEEE1609dot2::CertificateBase cert;
-		OCTETSTRING cert_blob;
-		OCTETSTRING cert_hash;
-		OCTETSTRING hashed_id8;
-		OCTETSTRING issuer_id8;
-		ItsPkiPublicKey v_pub_key;
-		ItsPkiPublicKey e_pub_key;
-
-		IEEE1609dot2BaseTypes::HashAlgorithm hash_algo = IEEE1609dot2BaseTypes::HashAlgorithm::UNKNOWN_VALUE;
-	public:
-		bool ParseCert(IEEE1609dot2::CertificateBase &cert);
-		int GetVerficationNID() {return v_pub_key.GetNID();};
-		int GetEncryptionNID() {return e_pub_key.GetNID();};
-		bool GetEncryptionXY(OCTETSTRING &_x, OCTETSTRING &_y) { return e_pub_key.GetXY(_x, _y);};
-		bool GetVerificationXY(OCTETSTRING &_x, OCTETSTRING &_y) { return v_pub_key.GetXY(_x, _y);};
-		bool GetCertHash(OCTETSTRING &ret);
-		bool GetHashedID8(OCTETSTRING &ret);
-	};
-	ItsPkiRecipient recipient;
-
 	class ItsPkiPrivateKey {
 	private:
 		std::string CLASS_NAME = std::string("ItsPkiEtsi::ItsPkiPrivateKey");
@@ -96,6 +73,7 @@ private:
 		void setAesSKey(const char *hex_value) {aes_skey = str2oct(hex_value);};
 		
 		bool setup(int, const char *);
+		bool setup(void *key, OCTETSTRING &);
 		bool generate(int);
 		bool derivate(const OCTETSTRING &recipient_pubkey_x, const OCTETSTRING &recipients_pubkey_y, const OCTETSTRING &salt);
 		bool encrypt(const OCTETSTRING &message, OCTETSTRING &nonce, OCTETSTRING &ret_enc_message);
@@ -105,6 +83,36 @@ private:
 	};
 	ItsPkiPrivateKey enc_key;
 
+	class ItsPkiRecipient {
+	private:
+		std::string CLASS_NAME = std::string("ItsPkiEtsi::ItsPkiRecipient");
+		IEEE1609dot2::CertificateBase cert;
+		OCTETSTRING cert_blob;
+		OCTETSTRING cert_hash;
+		OCTETSTRING hashed_id8;
+		OCTETSTRING issuer_id8;
+		ItsPkiPublicKey v_pub_key;
+		ItsPkiPublicKey e_pub_key;
+
+		void *e_prvkey = NULL;
+		void *sender_e_pubkey = NULL;
+
+		IEEE1609dot2BaseTypes::HashAlgorithm hash_algo = IEEE1609dot2BaseTypes::HashAlgorithm::UNKNOWN_VALUE;
+	public:
+		// bool setupForDecrypt(void *prvkey, void *pubkey);
+		void SetPrivateKey(void *key) { e_prvkey = key; };
+		void SetSenderPublicKey(void *key) { sender_e_pubkey = key; };
+		void *GetPrivateKey() { return e_prvkey; };
+		bool ParseCert(IEEE1609dot2::CertificateBase &cert);
+		int GetVerficationNID() { return v_pub_key.GetNID(); };
+		int GetEncryptionNID() { return e_pub_key.GetNID(); };
+		bool GetEncryptionXY(OCTETSTRING &_x, OCTETSTRING &_y) { return e_pub_key.GetXY(_x, _y); };
+		bool GetVerificationXY(OCTETSTRING &_x, OCTETSTRING &_y) { return v_pub_key.GetXY(_x, _y); };
+		bool GetCertHash(OCTETSTRING &ret);
+		bool GetHashedID8(OCTETSTRING &ret);
+	};
+	ItsPkiRecipient recipient;
+
 	bool ready = false;
 public:
 	ItsPkiEtsi() {
@@ -113,11 +121,15 @@ public:
 
 	~ItsPkiEtsi();
 
-	bool setup_encryptFor(IEEE1609dot2::CertificateBase &);
+	// bool setRecipient(IEEE1609dot2::CertificateBase &, void *);
+	bool setRecipient(OCTETSTRING &, void *);
+	bool setDecryptContext(void *, void *);
 	bool setup_decrypt(OCTETSTRING &);
-	bool EncryptPayload(IEEE1609dot2::CertificateBase &, OCTETSTRING &, EtsiTs103097Module::EtsiTs103097Data__Encrypted__My &);
+	// bool EncryptPayload(IEEE1609dot2::CertificateBase &, OCTETSTRING &, EtsiTs103097Module::EtsiTs103097Data__Encrypted__My &);
+	bool EncryptPayload(OCTETSTRING &, EtsiTs103097Module::EtsiTs103097Data__Encrypted__My &);
 	bool DecryptPayload(OCTETSTRING &, OCTETSTRING &);
-	int GetRecipientEncryptionNID() {return recipient.GetEncryptionNID();};
+	bool DecryptPayload(EtsiTs103097Module::EtsiTs103097Data__Encrypted__My &, OCTETSTRING &);
+	int GetRecipientEncryptionNID() { return recipient.GetEncryptionNID(); };
 };
 
 #endif // ifndef ITS_PKI_ETSI_SERVICES_HH

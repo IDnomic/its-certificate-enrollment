@@ -218,7 +218,7 @@ ItsPkiSession::GetIEEE1609dot2Signature(ItsPkiInternalData &idata, OCTETSTRING &
 	int nid = ECKey_GetNid(key);
 
 	OCTETSTRING rSig, sSig;
-	if (!idata.IEEE1609dot2_Sign(data, signer, key, rSig, sSig))   {
+	if (!IEEE1609dot2_Sign(data, signer, key, rSig, sSig))   {
 		ERROR_STREAMC << "Signature failed" << std::endl;
 		return false;
 	}
@@ -264,6 +264,176 @@ ItsPkiSession::GetIEEE1609dot2Signature(ItsPkiInternalData &idata, OCTETSTRING &
 
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
+}
+
+
+bool
+ItsPkiSession::IEEE1609dot2_VerifyToBeEncoded(OCTETSTRING &data, OCTETSTRING &signer, void *key,
+                OCTETSTRING &rSig, OCTETSTRING &sSig)
+{
+        DEBUGC_STREAM_CALLED;
+
+        switch (idata->GetHashAlgorithm())   {
+        case IEEE1609dot2BaseTypes::HashAlgorithm::sha256:
+		if (!IEEE1609dot2_VerifyWithSha256(key, rSig, sSig, data, signer))  {
+                        ERROR_STREAMC << "IEEE1609dot2 SHA256 verify failed" << std::endl;
+                        return false;
+                }
+                break;
+        case IEEE1609dot2BaseTypes::HashAlgorithm::sha384:
+		if (!IEEE1609dot2_VerifyWithSha384(key, rSig, sSig, data, signer))  {
+                        ERROR_STREAMC << "IEEE1609dot2 SHA384 verify failed" << std::endl;
+                        return false;
+                }
+                break;
+        default:
+                ERROR_STREAMC << "Unsupporteds hash algorithm" << idata->GetHashAlgorithm() << std::endl;
+                return false;
+        }
+
+        DEBUGC_STREAM_RETURNS_OK;
+        return true;
+}
+
+
+bool
+ItsPkiSession::IEEE1609dot2_VerifySignedData(IEEE1609dot2::SignedData &signed_data, void *key,
+		IEEE1609dot2::SignedDataPayload &ret_payload)
+{
+        DEBUGC_STREAM_CALLED;
+
+	OCTETSTRING sSig, rSig;
+	IEEE1609dot2BaseTypes::Signature signature = signed_data.signature__();
+	if (signature.ischosen(IEEE1609dot2BaseTypes::Signature::ALT_ecdsaNistP256Signature))   {
+		sSig = signature.ecdsaNistP256Signature().sSig();
+		if (signature.ecdsaNistP256Signature().rSig().ischosen(IEEE1609dot2BaseTypes::EccP256CurvePoint::ALT_x__only))   {
+			rSig = signature.ecdsaNistP256Signature().rSig().x__only();
+		}
+		else {
+        		ERROR_STREAMC << "not supported EccP256CurvePoint type other then ALT_x__only" << std::endl;
+			return false;
+		}
+	}
+	else if (signature.ischosen(IEEE1609dot2BaseTypes::Signature::ALT_ecdsaBrainpoolP256r1Signature))   {
+		sSig = signature.ecdsaBrainpoolP256r1Signature().sSig();
+		if (signature.ecdsaBrainpoolP256r1Signature().rSig().ischosen(IEEE1609dot2BaseTypes::EccP256CurvePoint::ALT_x__only))   {
+			rSig = signature.ecdsaBrainpoolP256r1Signature().rSig().x__only();
+		}
+		else {
+        		ERROR_STREAMC << "not supported EccP256CurvePoint type other then ALT_x__only" << std::endl;
+			return false;
+		}
+	}
+	else   {
+        	ERROR_STREAMC << "not supported Signature type : " << signature.get_selection() << std::endl;
+		return false;
+	}
+
+	IEEE1609dot2::ToBeSignedData tbs_data = signed_data.tbsData();
+        OCTETSTRING tbs_encoded;
+	if (!encToBeSignedData(tbs_data, tbs_encoded))   {
+	       	ERROR_STREAMC << "cannot encode ToBeSignedData" << std::endl;
+		return false;
+	}
+
+	OCTETSTRING signer_encoded;
+	if (signed_data.signer().ischosen(IEEE1609dot2::SignerIdentifier::ALT_self__))   {
+		signer_encoded = OCTETSTRING(0, NULL);
+	}
+	else if (signed_data.signer().ischosen(IEEE1609dot2::SignerIdentifier::ALT_digest))  {
+		if (idata->GetEAId() == signed_data.signer().digest())   {
+			signer_encoded = idata->GetEACertBlob();
+		}
+		else if (idata->GetAAId() == signed_data.signer().digest())   {
+			signer_encoded = idata->GetAACertBlob();
+		}
+		else if (idata->GetItsEcId() == signed_data.signer().digest())   {
+			signer_encoded = idata->GetItsEcCertBlob();
+		}
+		else   {
+	       		ERROR_STREAMC << "Expected to be signed by EA or by AA" << std::endl;
+			return false;
+		}
+
+		if (!idata->getVerificationKeyFromCertificate(signer_encoded, &key))   {
+	       		ERROR_STREAMC << "Cannot get verification key from certificate" << std::endl;
+			return false;
+		}
+	}
+	else   {
+	       	ERROR_STREAMC << "verify with signer other the 'self' do not implemented" << std::endl;
+		return false;
+	}
+
+	if (key == NULL)   {
+		ERROR_STREAMC << "No key to verify signature" << std::endl;
+		return false;
+	}
+
+	if (!IEEE1609dot2_VerifyToBeEncoded(tbs_encoded, signer_encoded, key, rSig, sSig))  {
+                ERROR_STREAMC << "Cannot verify signature" << std::endl;
+                return false;
+	}
+
+	ret_payload = tbs_data.payload();
+        
+	DEBUGC_STREAM_RETURNS_OK;
+        return true;
+}
+
+
+bool
+ItsPkiSession::IEEE1609dot2_VerifySignedData_C(IEEE1609dot2::SignedData &signed_data, void *key,
+		IEEE1609dot2::Ieee1609Dot2Content &ret_content)
+{
+        DEBUGC_STREAM_CALLED;
+	
+	IEEE1609dot2::SignedDataPayload payload;
+	if (!IEEE1609dot2_VerifySignedData(signed_data, key, payload))   {
+                ERROR_STREAMC << "cannot verify signed data" << std::endl;
+                return false;
+	}
+
+	if (payload.data().is_present())   {
+		IEEE1609dot2::Ieee1609Dot2Data data = payload.data();
+		if (data.protocolVersion() != Ieee1609Dot2Data_ProtocolVersion)   {
+                	ERROR_STREAMC << "Unsupported Ieee1609Dot2Data ProtocolVersion : " << data.protocolVersion() << std::endl;
+                	return false;
+		}
+		ret_content = data.content();
+	}
+	else   {
+                ERROR_STREAMC << "expected SignedData payload" << std::endl;
+                return false;
+	}
+
+	DEBUGC_STREAM_RETURNS_OK;
+        return true;
+}
+
+
+bool
+ItsPkiSession::IEEE1609dot2_VerifySignedData_H(IEEE1609dot2::SignedData &signed_data, void *key,
+		IEEE1609dot2::HashedData &ret_extDataHash)
+{
+        DEBUGC_STREAM_CALLED;
+
+	IEEE1609dot2::SignedDataPayload payload;
+	if (!IEEE1609dot2_VerifySignedData(signed_data, key, payload))   {
+                ERROR_STREAMC << "cannot verify signed data" << std::endl;
+                return false;
+	}
+
+	if (payload.extDataHash().is_present()) {
+		ret_extDataHash = payload.extDataHash();
+	}
+	else   {
+                ERROR_STREAMC << "expected SignedData ExtDataHash" << std::endl;
+                return false;
+	}
+
+        DEBUGC_STREAM_RETURNS_OK;
+        return true;
 }
 
 
@@ -317,7 +487,7 @@ ItsPkiSession::ItsRegisterRequest_Create(ItsPkiInternalData &idata, OCTETSTRING 
 
 
 bool
-ItsPkiSession::ItsRegisterResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING &ret_cert)
+ItsPkiSession::ItsRegisterResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING &ret_its_id)
 {
 	DEBUGC_STREAM_CALLED;
 
@@ -329,22 +499,9 @@ ItsPkiSession::ItsRegisterResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING 
 		ERROR_STREAMC << "Invalid ITS registration response: no 'id' tag" << std::endl;
 		return false;
 	}
-#if 0
-	else if (its_id.find_first_not_of( "0123456789" ) != std::string::npos)   {
-		ERROR_STREAMC << "Invalid ITS registration response: invalid id: '" << its_id << "" << std::endl;
-		return false;
-	}
-#endif
-	DEBUGC_STREAM_RETURNS_OK;
-	return true;
-}
 
-
-bool
-ItsPkiSession::ItsRegisterResponse_SaveToFiles(ItsPkiInternalData &idata, OCTETSTRING &request)
-{
-	DEBUGC_STREAM_CALLED;
-
+	ret_its_id = OCTETSTRING(its_id.length(), (const unsigned char *)its_id.c_str());
+	
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
 }
@@ -499,6 +656,7 @@ ItsPkiSession::EcEnrollmentRequest_InnerData(ItsPkiInternalData &idata,
 		return false;
 	}
 
+	dump_ttcn_object(tbs_encoded, "To be signed encoded: ");
 	IEEE1609dot2BaseTypes::HashAlgorithm hash_algo = idata.GetHashAlgorithm();
 	IEEE1609dot2::SignerIdentifier signer_id;
 	signer_id.self__() = ASN_NULL(ASN_NULL_VALUE);
@@ -530,7 +688,8 @@ ItsPkiSession::EcEnrollmentRequest_InnerData(ItsPkiInternalData &idata,
 
 
 bool
-ItsPkiSession::EncryptSignedData_ForEa(ItsPkiInternalData &idata, OCTETSTRING &tbe, IEEE1609dot2::Ieee1609Dot2Data &ret_encrypted)
+ItsPkiSession::EncryptSignedData_ForEa(ItsPkiInternalData &idata, OCTETSTRING &tbe,
+		IEEE1609dot2::Ieee1609Dot2Data &ret_encrypted)
 {
 	DEBUGC_STREAM_CALLED;
 
@@ -540,14 +699,7 @@ ItsPkiSession::EncryptSignedData_ForEa(ItsPkiInternalData &idata, OCTETSTRING &t
 		return false;
 	}
 
-	IEEE1609dot2::CertificateBase cert = decEtsiTs103097Certificate(cert_blob);
-	dump_ttcn_object(cert, "recipient certificate: ");
-        if (!cert.toBeSigned().encryptionKey().is_present())   {
-		ERROR_STREAMC << "no encryption key in recipient's certificate" << std::endl;
-		return false;
-	}
-
-	if (!etsiServices.setup_encryptFor(cert))   {
+	if (!etsiServices.setRecipient(cert_blob, NULL))   {
                 ERROR_STREAMC << "cannot setup EncryptFor context" << std::endl;
 		return false;
 	}
@@ -556,21 +708,18 @@ ItsPkiSession::EncryptSignedData_ForEa(ItsPkiInternalData &idata, OCTETSTRING &t
 	// 	recipients := { { certRecipInfo := { recipientId := ''O, encKey := { eciesNistP256 := { v := { compressed_y_0 := ''O }, c := ''O, t := ''O } } } } },
 	// 	ciphertext := { aes128ccm := { nonce := ''O, ccmCiphertext := ''O } }
 	// } } }
-	EtsiTs103097Module::EtsiTs103097Data__Encrypted__My my_encrypted;
-	if (!etsiServices.EncryptPayload(cert, tbe, my_encrypted))   {
+	EtsiTs103097Module::EtsiTs103097Data__Encrypted__My data_encrypted;
+	if (!etsiServices.EncryptPayload(tbe, data_encrypted))   {
                 ERROR_STREAMC << "failed to encrypt payload" << std::endl;
 		return false;
 	}
-	dump_ttcn_object(my_encrypted, "My Encrypted': ");
-
-	ret_encrypted = my_encrypted;
-
-	dump_ttcn_object(ret_encrypted, "returns data 'encrypted for': ");
-
-	if (!ret_encrypted.is_bound())   {
+	else if (!data_encrypted.is_bound())   {
                 ERROR_STREAMC << "cannot encode encrypted payload" << std::endl;
 		return false;
 	}
+	dump_ttcn_object(data_encrypted, "Data Encrypted': ");
+
+	ret_encrypted = data_encrypted;
 
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
@@ -611,30 +760,23 @@ ItsPkiSession::EncryptSignedData_ForAa(ItsPkiInternalData &idata, OCTETSTRING &t
 	DEBUGC_STREAM_CALLED;
 
 	OCTETSTRING cert_blob = idata.GetAACertBlob();
-	IEEE1609dot2::CertificateBase cert = decEtsiTs103097Certificate(cert_blob);
-	dump_ttcn_object(cert, "recipient certificate: ");
-        if (!cert.toBeSigned().encryptionKey().is_present())   {
-		ERROR_STREAMC << "not encryption key in recipient's certificate" << std::endl;
-		return false;
-	}
-
-	if (!etsiServices.setup_encryptFor(cert))   {
+	
+	if (!etsiServices.setRecipient(cert_blob, NULL))   {
                 ERROR_STREAMC << "cannot setup EncryptFor AA context" << std::endl;
 		return false;
 	}
 
-	EtsiTs103097Module::EtsiTs103097Data__Encrypted__My my_encrypted;
-	if (!etsiServices.EncryptPayload(cert, tbe, my_encrypted))   {
+	EtsiTs103097Module::EtsiTs103097Data__Encrypted__My data_encrypted;
+	if (!etsiServices.EncryptPayload(tbe, data_encrypted))   {
+                ERROR_STREAMC << "failed to encrypt payload for AA" << std::endl;
+		return false;
+	}
+	else if (!data_encrypted.is_bound())   {
                 ERROR_STREAMC << "failed to encrypt payload for AA" << std::endl;
 		return false;
 	}
 
-	if (!my_encrypted.is_bound())   {
-                ERROR_STREAMC << "failed to encrypt payload for AA" << std::endl;
-		return false;
-	}
-
-	ret_encrypted = my_encrypted;
+	ret_encrypted = data_encrypted;
 	dump_ttcn_object(ret_encrypted, "returns data 'encrypted for': ");
 
 	DEBUGC_STREAM_RETURNS_OK;
@@ -669,19 +811,21 @@ ItsPkiSession::EcEnrollmentResponse_Parse(OCTETSTRING &response_raw)
 	EtsiTs103097Module::EtsiTs103097Data__Signed__My response_data_signed = decEtsiTs103097DataSigned(payload);
 	dump_ttcn_object(response_data_signed, "EtsiTs103097Module::EtsiTs103097DataSigned response: ");
 
-	IEEE1609dot2::Ieee1609Dot2Data payload_data = response_data_signed.content().signedData().tbsData().payload().data();
-	if (!payload_data.is_present())   {
-        	ERROR_STREAMC << "invalid signed payload data" << std::endl;
+	IEEE1609dot2::Ieee1609Dot2Content content;
+	if (!IEEE1609dot2_VerifySignedData_C(response_data_signed.content().signedData(), NULL, content))   {
+                ERROR_STREAMC << "Cannot verify Signed Data signature" << std::endl;
+                return false;
+	}
+	else if (!content.ischosen(IEEE1609dot2::Ieee1609Dot2Content::ALT_unsecuredData))  {
+        	ERROR_STREAMC << "expected data type 'Ieee1609Dot2Content::ALT_unsecuredData'" << std::endl;
 		return false;
 	}
-	else if (!payload_data.content().ischosen(IEEE1609dot2::Ieee1609Dot2Content::ALT_unsecuredData))  {
-        	ERROR_STREAMC << "invalid choice" << std::endl;
-		return false;
-	}
+	dump_ttcn_object(content, "Signed data content: ");
 
-	OCTETSTRING inner_unsecured_data = payload_data.content().unsecuredData();
+	OCTETSTRING inner_unsecured_data = content.unsecuredData();
 	EtsiTs102941MessagesCa::EtsiTs102941Data response_inner_data = decEtsiTs102941Data(inner_unsecured_data);
 	dump_ttcn_object(response_inner_data, "Response data: ");
+
 	if (!response_inner_data.content().ischosen(EtsiTs102941MessagesCa::EtsiTs102941DataContent::ALT_enrolmentResponse))  {
         	ERROR_STREAMC << "invalid choice" << std::endl;
 		return false;
@@ -698,8 +842,7 @@ ItsPkiSession::EcEnrollmentResponse_Parse(OCTETSTRING &response_raw)
         	ERROR_STREAMC << "cannot encode EtsiTs103097Certificate" << std::endl;
 		return false;
 	}
-
-	if (!getEtsiTs103097CertId(sessionItsEcCert, sessionItsEcId))   {
+	else if (!getEtsiTs103097CertId(sessionItsEcCert, sessionItsEcId))   {
         	ERROR_STREAMC << "cannot set EtsiTs103097Certificate ID" << std::endl;
 		return false;
 	}
@@ -722,32 +865,142 @@ ItsPkiSession::EcEnrollmentResponse_Status(OCTETSTRING &response_raw)
 		return false;
 	}
 	
-	EtsiTs103097Module::EtsiTs103097Data__Signed__My response_data_signed = decEtsiTs103097DataSigned(payload);
-
-	IEEE1609dot2::Ieee1609Dot2Data payload_data = response_data_signed.content().signedData().tbsData().payload().data();
-	if (!payload_data.is_present())  {
-        	ERROR_STREAMC << "no 'PAYLOAD' in SignedData" << std::endl;
+	EtsiTs103097Module::EtsiTs103097Data__Signed__My data_signed = decEtsiTs103097DataSigned(payload);
+	IEEE1609dot2::Ieee1609Dot2Content content;
+	if (!IEEE1609dot2_VerifySignedData_C(data_signed.content().signedData(), NULL, content))   {
+                ERROR_STREAMC << "Cannot verify Signed Data signature" << std::endl;
+                return false;
+	}
+	else if (!content.ischosen(IEEE1609dot2::Ieee1609Dot2Content::ALT_unsecuredData))  {
+        	ERROR_STREAMC << "expected data type 'Ieee1609Dot2Content::ALT_unsecuredData'" << std::endl;
 		return false;
 	}
-	if (!payload_data.content().ischosen(IEEE1609dot2::Ieee1609Dot2Content::ALT_unsecuredData))   {
-        	ERROR_STREAMC << "expected 'UnsecuredData' Ieee1609Dot2Content content type" << std::endl;
-		return false;
-	}
-
-	EtsiTs102941MessagesCa::EtsiTs102941Data response_inner_data = decEtsiTs102941Data(payload_data.content().unsecuredData());
-	if (!response_inner_data.content().ischosen(EtsiTs102941MessagesCa::EtsiTs102941DataContent::ALT_enrolmentResponse))   {
+	dump_ttcn_object(content, "Signed data content: ");
+	
+	EtsiTs102941MessagesCa::EtsiTs102941Data inner_data = decEtsiTs102941Data(content.unsecuredData());
+	if (!inner_data.content().ischosen(EtsiTs102941MessagesCa::EtsiTs102941DataContent::ALT_enrolmentResponse))   {
         	ERROR_STREAMC << "expected 'EnrollmentResponse' inner data type " << std::endl;
 		return false;
 	}
 
-	EtsiTs102941TypesEnrolment::EnrolmentResponseCode respCode = response_inner_data.content().enrolmentResponse().responseCode();
+	EtsiTs102941TypesEnrolment::EnrolmentResponseCode respCode = inner_data.content().enrolmentResponse().responseCode();
 	if (respCode != EtsiTs102941TypesEnrolment::EnrolmentResponseCode::ok)   {
         	ERROR_STREAMC << "expected response code 'OK', received '" << respCode.enum_to_str(respCode) << "'" << std::endl;
 		return false;
 	}
+	
+	DEBUGC_STREAM_RETURNS_OK;
+	return true; 
+}
+
+
+bool
+ItsPkiSession::EcEnrollmentRequest_Parse(OCTETSTRING &request_raw, void *recipient_prvkey, EtsiTs102941TypesEnrolment::InnerEcRequest &inner_ec_request)
+{
+	DEBUGC_STREAM_CALLED;
+
+	if (!etsiServices.setDecryptContext(recipient_prvkey, NULL))   {
+                ERROR_STREAMC << "Cannot set EC enrollment 'Request Parse' context" << std::endl;
+                return false;
+	}
+
+	OCTETSTRING payload;
+	if (!etsiServices.DecryptPayload(request_raw, payload))   {
+                ERROR_STREAMC << "decrypt payload failed" << std::endl;
+                return false;
+	}
+	
+	EtsiTs103097Module::EtsiTs103097Data__Signed__My request_data_signed = decEtsiTs103097DataSigned(payload);
+	dump_ttcn_object(request_data_signed, "Signed request: ");
+
+	IEEE1609dot2::Ieee1609Dot2Content content;
+	if (!IEEE1609dot2_VerifySignedData_C(request_data_signed.content().signedData(), sessionGetTechnicalKey(), content))   {
+                ERROR_STREAMC << "Cannot verify Signed Data signature" << std::endl;
+                return false;
+	}
+	else if (!content.ischosen(IEEE1609dot2::Ieee1609Dot2Content::ALT_unsecuredData))  {
+        	ERROR_STREAMC << "expected data type 'Ieee1609Dot2Content::ALT_unsecuredData'" << std::endl;
+		return false;
+	}
+
+	EtsiTs102941MessagesCa::EtsiTs102941Data inner_data;
+	try   {
+		EtsiTs102941MessagesCa::EtsiTs102941Data_decoder(content.unsecuredData(), inner_data, "OER");
+	}
+	catch (const TC_Error& tc_error) {
+        	ERROR_STREAMC << "cannot decode Ec Enrollment inner-data" << std::endl;
+		return false;
+	}
+
+	dump_ttcn_object(inner_data, "Inner request data: ");
+	if (!inner_data.content().ischosen(EtsiTs102941MessagesCa::EtsiTs102941DataContent::ALT_enrolmentRequest))  {
+        	ERROR_STREAMC << "expected data type 'EtsiTs102941DataContent::ALT_enrolmentRequest'" << std::endl;
+		return false;
+	}
+
+	IEEE1609dot2::Ieee1609Dot2Data enrolment_request = inner_data.content().enrolmentRequest();
+	dump_ttcn_object(enrolment_request, "EC enrolment request: ");
+	if (enrolment_request.protocolVersion() != Ieee1609Dot2Data_ProtocolVersion)   {
+        	ERROR_STREAMC << "Invalid inner data protocol version: " << enrolment_request.protocolVersion() << std::endl;
+		return false;
+	}
+	if (!enrolment_request.content().ischosen(IEEE1609dot2::Ieee1609Dot2Content::ALT_signedData))  {
+        	ERROR_STREAMC << "Expected type 'Ieee1609Dot2Content::ALT_signedData'" << std::endl;
+		return false;
+	}
+	IEEE1609dot2::SignedData signed_data = enrolment_request.content().signedData();
+	dump_ttcn_object(signed_data, "Signed Data: ");
+	
+	if (!IEEE1609dot2_VerifySignedData_C(signed_data, sessionGetItsEcVerificationKey(), content))   {
+                ERROR_STREAMC << "Cannot verify Signed Data signature" << std::endl;
+                return false;
+	}
+	else if (!content.ischosen(IEEE1609dot2::Ieee1609Dot2Content::ALT_unsecuredData))  {
+        	ERROR_STREAMC << "expected data type 'Ieee1609Dot2Content::ALT_unsecuredData'" << std::endl;
+		return false;
+	}
+
+	try   {
+		EtsiTs102941TypesEnrolment::InnerEcRequest_decoder(content.unsecuredData(), inner_ec_request, "OER");
+	}
+	catch (const TC_Error& tc_error) {
+        	ERROR_STREAMC << "cannot decode InnerEcRequest data" << std::endl;
+		return false;
+	}
+	dump_ttcn_object(inner_ec_request, "Inner EC request: ");
 
 	DEBUGC_STREAM_RETURNS_OK;
 	return true; 
+}
+
+
+bool
+ItsPkiSession::IEEE1609dot2_Sign(OCTETSTRING &data, OCTETSTRING &signer,
+                void *key,
+                OCTETSTRING &rSig, OCTETSTRING &sSig)
+{
+        DEBUGC_STREAM_CALLED;
+
+        switch (idata->GetHashAlgorithm())   {
+        case IEEE1609dot2BaseTypes::HashAlgorithm::sha256:
+                if (!IEEE1609dot2_SignWithSha256(data, signer, key, rSig, sSig))   {
+                        ERROR_STREAMC << "IEEE1609dot2 SHA256 signature failed" << std::endl;
+                        return false;
+                }
+                break;
+        case IEEE1609dot2BaseTypes::HashAlgorithm::sha384:
+                if (!IEEE1609dot2_SignWithSha384(data, signer, key, rSig, sSig))   {
+                        ERROR_STREAMC << "IEEE1609dot2 SHA384 signature failed" << std::endl;
+                        return false;
+                }
+                break;
+        default:
+                ERROR_STREAMC << "Unsupporteds hash algorithm" << idata->GetHashAlgorithm() << std::endl;
+                return false;
+        }
+
+        DEBUGC_STREAM_RETURNS_OK;
+        return true;
 }
 
 
@@ -955,40 +1208,6 @@ ItsPkiSession::EcEnrollmentRequest_Create(ItsPkiInternalData &idata, OCTETSTRING
 }
 
 
-bool
-ItsPkiSession::EcEnrollmentResponse_SaveToFiles(ItsPkiInternalData &idata, OCTETSTRING &cert_encoded)
-{
-	DEBUGC_STREAM_CALLED;
-	
-	std::string save2file = idata.GetItsEcCertSave2File();
-	if (!save2file.empty())   {
-		if (writeToFile(save2file.c_str(), (const unsigned char *)cert_encoded, cert_encoded.lengthof()))   {
-        		ERROR_STREAMC << "cannot write ITS EC certificate to file '" << save2file << "'" << std::endl;
-			return false;
-		}
-	}
-
-	save2file = idata.GetItsEcVerificationKeySave2File();
-	if (!save2file.empty())   {
-		if (!ECKey_PrivateKeyToFile(sessionGetItsEcVerificationKey(), save2file.c_str()))   {
-        		ERROR_STREAMC << "cannot store ITS EC verification key to file '" << save2file << "'" << std::endl;
-			return false;
-		}
-	}
-
-	save2file = idata.GetItsEcEncryptionKeySave2File();
-	if (!save2file.empty())   {
-		if (!ECKey_PrivateKeyToFile(sessionGetItsEcEncryptionKey(), save2file.c_str()))   {
-        		ERROR_STREAMC << "cannot store ITS EC encryption key to file '" << save2file << "'" << std::endl;
-			return false;
-		}
-	}
-
-	DEBUGC_STREAM_RETURNS_OK;
-	return true; 
-}
-
-
 // At Request
 bool
 ItsPkiSession::sessionCheckAtEnrollmentArguments(ItsPkiInternalData &idata)
@@ -1172,25 +1391,18 @@ ItsPkiSession::AtEnrollmentRequest_InnerAtRequest(ItsPkiInternalData &idata, OCT
 {
 	DEBUGC_STREAM_CALLED;
 
-#if 0
-	if (!idata.CheckAtEnrollmentArguments())   {
-		ERROR_STREAMC << "ItsPkiSession::AtEnrollmentRequest_InnerAtRequest() invalid internal AT enrollment data" << std::endl;
-		return false;
-	}
-#else
 	if (!sessionCheckAtEnrollmentArguments(idata))   {
 		ERROR_STREAMC << "ItsPkiSession::AtEnrollmentRequest_Create() invalid At session data" << std::endl;
 		return false;
 	}
-#endif
+
+	OCTETSTRING v_pubkey_encoded;
 	IEEE1609dot2BaseTypes::PublicVerificationKey v_pubkey;
         if (!GetItsAtPublicVerificationKey(v_pubkey))   {
 		ERROR_STREAMC << "cannot get ITS AT PublicVerificationKey" << std::endl;
 		return false;
 	}
-
-	OCTETSTRING v_pubkey_encoded;
-	if (!encPublicVerificationKey(v_pubkey, v_pubkey_encoded))   {
+	else if (!encPublicVerificationKey(v_pubkey, v_pubkey_encoded))   {
 		ERROR_STREAMC << "cannot encode ITS AT PublicVerificationKey" << std::endl;
 		return false;
 	}
@@ -1212,7 +1424,6 @@ ItsPkiSession::AtEnrollmentRequest_InnerAtRequest(ItsPkiInternalData &idata, OCT
 	OCTETSTRING hmac = random_OCTETSTRING(SHA256_DIGEST_LENGTH);
 	dump_ttcn_object(hmac, "HMAC: ");
 
-	// size_t tag_len = EtsiTs102941TypesAuthorization::SharedAtRequest_keyTag_descr_.oer->length;
 	OCTETSTRING keyTag;
 	OCTETSTRING pub_keys = v_pubkey_encoded + e_pubkey_encoded;
 	dump_ttcn_object(pub_keys, "PubKeys encoded: ");
@@ -1304,6 +1515,146 @@ ItsPkiSession::AtEnrollmentRequest_InnerAtRequest(ItsPkiInternalData &idata, OCT
 
 
 bool
+ItsPkiSession::AtEnrollmentRequest_Parse(OCTETSTRING &request_raw, void *ea_prvkey, void *aa_prvkey)
+{
+	DEBUGC_STREAM_CALLED;
+
+	if (!etsiServices.setDecryptContext(aa_prvkey, NULL))   {
+                ERROR_STREAMC << "Cannot set EC enrollment 'Request Parse' context" << std::endl;
+                return false;
+	}
+
+	OCTETSTRING payload;
+	if (!etsiServices.DecryptPayload(request_raw, payload))   {
+                ERROR_STREAMC << "decrypt payload failed" << std::endl;
+                return false;
+	}
+	
+	EtsiTs103097Module::EtsiTs103097Data__Signed__My request_data_signed = decEtsiTs103097DataSigned(payload);
+	dump_ttcn_object(request_data_signed, "Signed request: ");
+
+	IEEE1609dot2::Ieee1609Dot2Content content;
+	if (!IEEE1609dot2_VerifySignedData_C(request_data_signed.content().signedData(), sessionGetItsAtVerificationKey(), content))   {
+                ERROR_STREAMC << "Cannot verify Signed Data signature" << std::endl;
+                return false;
+	}
+	else if (!content.ischosen(IEEE1609dot2::Ieee1609Dot2Content::ALT_unsecuredData))  {
+        	ERROR_STREAMC << "expected data type 'Ieee1609Dot2Content::ALT_unsecuredData'" << std::endl;
+		return false;
+	}
+
+	EtsiTs102941MessagesCa::EtsiTs102941Data etsi_ts_data = decEtsiTs102941Data(content.unsecuredData());
+	dump_ttcn_object(etsi_ts_data, "Etsi TS Data: ");
+
+	if (etsi_ts_data.version() != EtsiTs102941Data_Version)  {
+        	ERROR_STREAMC << "unsupported EtsiTs102941Data version: " << etsi_ts_data.version() << std::endl;
+		return false;
+	}
+	else if (!etsi_ts_data.content().ischosen(EtsiTs102941MessagesCa::EtsiTs102941DataContent::ALT_authorizationRequest))   {
+        	ERROR_STREAMC << "expected 'authorizationRequest' data type" << std::endl;
+		return false;
+	}
+
+	EtsiTs102941TypesAuthorization::InnerAtRequest inner_at_request = etsi_ts_data.content().authorizationRequest();
+	EtsiTs102941BaseTypes::PublicKeys pubkeys = inner_at_request.publicKeys();
+	OCTETSTRING hmac_key = inner_at_request.hmacKey();
+	EtsiTs102941TypesAuthorization::SharedAtRequest shared_at_request = inner_at_request.sharedAtRequest();
+	EtsiTs102941BaseTypes::EcSignature ec_signature = inner_at_request.ecSignature();
+	dump_ttcn_object(ec_signature, "EcSignature: ");
+
+        OCTETSTRING pubkeys_encoded;
+        if (!encPublicVerificationKey(pubkeys.verificationKey(), pubkeys_encoded))   {
+        	ERROR_STREAMC << "cannot encode public verification key" << std::endl;
+		return false;
+	}
+	if (pubkeys.encryptionKey().is_present())    {
+        	OCTETSTRING e_pubkey_encoded;
+		if (!encPublicEncryptionKey(pubkeys.encryptionKey(), e_pubkey_encoded))   {
+        		ERROR_STREAMC << "cannot encode public encryption key" << std::endl;
+			return false;
+		}
+		pubkeys_encoded += e_pubkey_encoded;
+	}
+
+        OCTETSTRING key_tag;
+        if (!hmac_sha256(pubkeys_encoded, hmac_key, key_tag))   {
+                ERROR_STREAMC << "failed to generate HMAC of PublicKeys data" << std::endl;
+                return false;
+        }
+	dump_ttcn_object(key_tag, "PublicKeys tag: ");
+	if (shared_at_request.keyTag() != key_tag)   {
+                ERROR_STREAMC << "unexpected value of PublicKey HMAC" << std::endl;
+                return false;
+	} 
+        
+	OCTETSTRING ec_signature_payload;
+	if (ec_signature.ischosen(EtsiTs102941BaseTypes::EcSignature::ALT_encryptedEcSignature))   {
+        	EtsiTs103097Module::EtsiTs103097Data__Encrypted__My ec_signature_encrypted = ec_signature.encryptedEcSignature();
+		
+		if (!etsiServices.setRecipient(idata->GetEACertBlob(), ea_prvkey))   {
+                	ERROR_STREAMC << "cannot setup EncryptFor context" << std::endl;
+			return false;
+		}
+		else if (!etsiServices.DecryptPayload(ec_signature_encrypted, ec_signature_payload))   {
+                	ERROR_STREAMC << "decrypt payload failed" << std::endl;
+                	return false;
+		}
+	}
+	else if (ec_signature.ischosen(EtsiTs102941BaseTypes::EcSignature::ALT_ecSignature))   {
+        	ERROR_STREAMC << "'ecSignature' type of EcSignature do not supported" << std::endl;
+		return false;
+	}
+	else   {
+        	ERROR_STREAMC << "unsupported EcSignature type" << std::endl;
+		return false;
+	}
+	dump_ttcn_object(ec_signature_payload, "Decrypted payload: ");
+
+        EtsiTs103097Module::EtsiTs103097Data__SignedExternalPayload external_payload;
+	try  {
+        	EtsiTs103097Module::EtsiTs103097Data__SignedExternalPayload_decoder(ec_signature_payload, external_payload, "OER");
+	}
+	catch (const TC_Error& tc_error) {
+        	ERROR_STREAMC << "cannot decode EtsiTs103097Data SignedExternalPayload data" << std::endl;
+		return false;
+	}
+	dump_ttcn_object(external_payload, "Decoded Exrternal Payload: ");
+
+	if (external_payload.protocolVersion() != Ieee1609Dot2Data_ProtocolVersion)   {
+        	ERROR_STREAMC << "unexpected ExternalPayload protocol version: " << external_payload.protocolVersion() << std::endl;
+		return false;
+	}
+	else if (!external_payload.content().ischosen(IEEE1609dot2::Ieee1609Dot2Content::ALT_signedData))   {
+        	ERROR_STREAMC << "unexpected Ieee1609Dot2Content data type of external payload: " << external_payload.content().get_selection() << std::endl;
+		return false;
+	}
+
+	IEEE1609dot2::HashedData ext_data_hash;
+	if (!IEEE1609dot2_VerifySignedData_H(external_payload.content().signedData(), sessionGetItsEcVerificationKey(), ext_data_hash))   {
+		ERROR_STREAMC << "Cannot verify external payload signed data " << std::endl;
+		return false;
+	}
+
+	OCTETSTRING sar_encoded, sar_hash;
+	if (!encSharedAtRequest(shared_at_request, sar_encoded))   {
+		ERROR_STREAMC << "cannot encode EtsiTs102941TypesAuthorization::SharedAtRequest" << std::endl;
+		return false;
+	}
+	else if (!hash_256(sar_encoded, sar_hash))   {
+		ERROR_STREAMC << "cannot get hash of sharedAtRequest" << std::endl;
+		return false;
+	}
+	else if (sar_hash != ext_data_hash.sha256HashedData())   {
+		ERROR_STREAMC << "unexpected ExternalDataHashvalue" << std::endl;
+		return false;
+	}
+
+	DEBUGC_STREAM_RETURNS_OK;
+	return true;
+}	
+
+
+bool
 ItsPkiSession::AtEnrollmentResponse_Status(OCTETSTRING &response_raw)
 {
 	DEBUGC_STREAM_CALLED;
@@ -1314,25 +1665,28 @@ ItsPkiSession::AtEnrollmentResponse_Status(OCTETSTRING &response_raw)
 		return false;
 	}
 	
-	EtsiTs103097Module::EtsiTs103097Data__Signed__My response_data_signed = decEtsiTs103097DataSigned(payload);
+	EtsiTs103097Module::EtsiTs103097Data__Signed__My data_signed = decEtsiTs103097DataSigned(payload);
 
-	IEEE1609dot2::Ieee1609Dot2Data payload_data = response_data_signed.content().signedData().tbsData().payload().data();
-	if (!payload_data.is_present())   {
-        	ERROR_STREAMC << "no 'PAYLOAD' in SignedData" << std::endl;
+	IEEE1609dot2::Ieee1609Dot2Content content;
+	if (!IEEE1609dot2_VerifySignedData_C(data_signed.content().signedData(), NULL, content))   {
+                ERROR_STREAMC << "Cannot verify Signed Data signature" << std::endl;
+                return false;
+	}
+	else if (!content.ischosen(IEEE1609dot2::Ieee1609Dot2Content::ALT_unsecuredData))  {
+        	ERROR_STREAMC << "expected data type 'Ieee1609Dot2Content::ALT_unsecuredData'" << std::endl;
 		return false;
 	}
-	if (!payload_data.content().ischosen(IEEE1609dot2::Ieee1609Dot2Content::ALT_unsecuredData))   {
-        	ERROR_STREAMC << "expected 'UnsecuredData' Ieee1609Dot2Content content type" << std::endl;
-		return false;
-	}
+	dump_ttcn_object(content, "Signed data content: ");
 
-	EtsiTs102941MessagesCa::EtsiTs102941Data response_inner_data = decEtsiTs102941Data(payload_data.content().unsecuredData());
-	if (!response_inner_data.content().ischosen(EtsiTs102941MessagesCa::EtsiTs102941DataContent::ALT_authorizationResponse))   {
+	EtsiTs102941MessagesCa::EtsiTs102941Data inner_data = decEtsiTs102941Data(content.unsecuredData());
+	dump_ttcn_object(inner_data, "Response Inner Data: ");
+
+	if (!inner_data.content().ischosen(EtsiTs102941MessagesCa::EtsiTs102941DataContent::ALT_authorizationResponse))   {
         	ERROR_STREAMC << "expected 'AuthorizationResponse' inner data type " << std::endl;
 		return false;
 	}
 
-	EtsiTs102941TypesAuthorization::AuthorizationResponseCode respCode = response_inner_data.content().authorizationResponse().responseCode();
+	EtsiTs102941TypesAuthorization::AuthorizationResponseCode respCode = inner_data.content().authorizationResponse().responseCode();
 	if (respCode != EtsiTs102941TypesAuthorization::AuthorizationResponseCode::ok)   {
         	ERROR_STREAMC << "expected response code 'OK', received '" << respCode.enum_to_str(respCode) << "'" << std::endl;
 		return false;
@@ -1354,79 +1708,46 @@ ItsPkiSession::AtEnrollmentResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING
                 return false;
 	}
 	
-	EtsiTs103097Module::EtsiTs103097Data__Signed__My response_data_signed = decEtsiTs103097DataSigned(payload);
-	dump_ttcn_object(response_data_signed, "Response EtsiTs103097DataSigned__My: ");
-
-	IEEE1609dot2::Ieee1609Dot2Data payload_data = response_data_signed.content().signedData().tbsData().payload().data();
-	if (!payload_data.is_present())   {
-        	ERROR_STREAMC << "invalid signed payload data" << std::endl;
+	EtsiTs103097Module::EtsiTs103097Data__Signed__My data_signed = decEtsiTs103097DataSigned(payload);
+	dump_ttcn_object(data_signed, "Response EtsiTs103097DataSigned__My: ");
+	
+	IEEE1609dot2::Ieee1609Dot2Content content;
+	if (!IEEE1609dot2_VerifySignedData_C(data_signed.content().signedData(), NULL, content))   {
+                ERROR_STREAMC << "Cannot verify Signed Data signature" << std::endl;
+                return false;
+	}
+	else if (!content.ischosen(IEEE1609dot2::Ieee1609Dot2Content::ALT_unsecuredData))  {
+        	ERROR_STREAMC << "expected data type 'Ieee1609Dot2Content::ALT_unsecuredData'" << std::endl;
 		return false;
 	}
-	else if (!payload_data.content().ischosen(IEEE1609dot2::Ieee1609Dot2Content::ALT_unsecuredData))  {
-        	ERROR_STREAMC << "invalid choice: '" << payload_data.content().get_selection() << "'" << std::endl;
+	dump_ttcn_object(content, "Signed data content: ");
+
+	EtsiTs102941MessagesCa::EtsiTs102941Data inner_data = decEtsiTs102941Data(content.unsecuredData());
+	dump_ttcn_object(inner_data, "Response Inner Data: ");
+
+	if (!inner_data.content().ischosen(EtsiTs102941MessagesCa::EtsiTs102941DataContent::ALT_authorizationResponse))  {
+        	ERROR_STREAMC << "invalid response inner data type: '" << inner_data.content().get_selection() << "'" << std::endl;
 		return false;
 	}
 
-	OCTETSTRING inner_unsecured_data = payload_data.content().unsecuredData();
-	EtsiTs102941MessagesCa::EtsiTs102941Data response_inner_data = decEtsiTs102941Data(inner_unsecured_data);
-	dump_ttcn_object(response_inner_data, "Response Inner EtsiTs102941Data: ");
-
-	if (!response_inner_data.content().ischosen(EtsiTs102941MessagesCa::EtsiTs102941DataContent::ALT_authorizationResponse))  {
-        	ERROR_STREAMC << "invalid response inner data type: '" << response_inner_data.content().get_selection() << "'" << std::endl;
-		return false;
-	}
-
-	EtsiTs102941TypesAuthorization::InnerAtResponse inner_at_response = response_inner_data.content().authorizationResponse();
+	EtsiTs102941TypesAuthorization::InnerAtResponse inner_at_response = inner_data.content().authorizationResponse();
 	dump_ttcn_object(inner_at_response, "EtsiTs102941TypesAuthorization::InnerAtResponse : ");
 	if (inner_at_response.responseCode() != EtsiTs102941TypesAuthorization::AuthorizationResponseCode::ok)   {
-        	ERROR_STREAMC << "enrollment faild with response status '" << inner_at_response.responseCode() << "'" << std::endl;
+        	ERROR_STREAMC << "enrollment failed with response status '" << inner_at_response.responseCode() << "'" << std::endl;
 		return false;
 	}
 
 	EtsiTs103097Module::EtsiTs103097Certificate cert = inner_at_response.certificate();
 	dump_ttcn_object(cert, "ITS AT Certificate: ");
 
-	if (!encEtsiTs103097Certificate(cert, ret_cert))    {
-        	ERROR_STREAMC << "cannot encode EtsiTs103097Certificate" << std::endl;
+	if (!encEtsiTs103097Certificate(cert, sessionItsAtCert))    {
+        	ERROR_STREAMC << "cannot encode AT EtsiTs103097Certificate" << std::endl;
 		return false;
 	}
-	dump_ttcn_object(ret_cert, "ITS AT Certificate (encoded): ");
+	dump_ttcn_object(sessionItsAtCert, "ITS AT Certificate (encoded): ");
 
+	ret_cert = sessionItsAtCert;
 	DEBUGC_STREAM_RETURNS_OK;
 	return true; 
-}
-
-
-bool
-ItsPkiSession::AtEnrollmentResponse_SaveToFiles(ItsPkiInternalData &idata, OCTETSTRING &cert_encoded)
-{
-	DEBUGC_STREAM_CALLED;
-
-	std::string save2file = idata.GetItsAtCertSave2File();
-	if (!save2file.empty())   {
-		if (writeToFile(save2file.c_str(), (const unsigned char *)cert_encoded, cert_encoded.lengthof()))   {
-        		ERROR_STREAMC << "cannot write ITS AT certificate to file '" << save2file << "'" << std::endl;
-			return false;
-		}
-	}
-
-	save2file = idata.GetItsAtVerificationKeySave2File();
-	if (!save2file.empty())   {
-		if (!ECKey_PrivateKeyToFile(idata.GetItsAtVerificationKey(), save2file.c_str()))   {
-        		ERROR_STREAMC << "cannot store ITS AT verification key to file '" << save2file << "'" << std::endl;
-			return false;
-		}
-	}
-
-	save2file = idata.GetItsAtEncryptionKeySave2File();
-	if (!save2file.empty())   {
-		if (!ECKey_PrivateKeyToFile(idata.GetItsAtEncryptionKey(), save2file.c_str()))   {
-        		ERROR_STREAMC << "cannot store ITS AT encryption key to file '" << save2file << "'" << std::endl;
-			return false;
-		}
-	}
-
-	DEBUGC_STREAM_RETURNS_OK;
-	return true;
 }
 

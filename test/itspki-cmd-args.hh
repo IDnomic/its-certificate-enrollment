@@ -97,6 +97,8 @@ public:
 
 	bool ValidateOperation(void);
 
+	bool keep_its = false;
+	std::string user_password;
 	std::string url_ea;
 	std::string url_aa;
 	std::string url_its;
@@ -111,9 +113,9 @@ public:
 	std::string ssl_client_key;
 	std::string ssl_ca_chain;
 
-	std::string app_perms_ssp_opaque;
-	std::string app_perms_ssp_bitmap;
-	long app_perms_psid = 0;
+	std::string ec_psidssp_seq;
+	std::string at_psidssp_seq;
+
 	std::string hexitsaidssplist;
 	std::string hexvalidityrestrictions;
 	std::string eacertfile;
@@ -122,6 +124,7 @@ public:
 	std::string aacert_b64;
 	std::string its_tkey;
 	std::string its_tkey_b64;
+	bool its_need_to_register = false;
 	
 	std::string its_ec_certfile;
 	std::string its_ec_cert_b64;
@@ -130,9 +133,8 @@ public:
 	std::string its_ec_ekey;
 	std::string its_ec_ekey_b64;
 	bool its_ec_ekey_enable = false;
-	std::string its_ec_cert_save2file;
-	std::string its_ec_vkey_save2file;
-	std::string its_ec_ekey_save2file;
+	bool its_need_ec_enrollment = false;
+	bool its_ec_save = false;
 	
 	std::string its_at_certfile;
 	std::string its_at_cert_b64;
@@ -141,14 +143,12 @@ public:
 	std::string its_at_ekey;
 	std::string its_at_ekey_b64;
 	bool its_at_ekey_enable = false;
-	std::string its_at_cert_save2file;
-	std::string its_at_vkey_save2file;
-	std::string its_at_ekey_save2file;
+	bool its_at_save = false;
 	
 	int wantedstart;
 	int taiutc;
-	long cycles_num;
-	long threads_num;
+	long cycles_num = 1;
+	long threads_num = 1;
 	bool do_bench;
 
 	int debug;
@@ -206,6 +206,8 @@ public:
 };
 
 
+#define PKIITS_CMDARG_KEEP_ITS		"PKIITS_CMDARG_KEEP_ITS"
+#define PKIITS_CMDARG_USER_PASSWORD	"PKIITS_CMDARG_USER_PASSWORD"
 #define PKIITS_CMDARG_URL_EA	"PKIITS_CMDARG_URL_EA"
 #define PKIITS_CMDARG_URL_AA	"PKIITS_CMDARG_URL_AA"
 #define PKIITS_CMDARG_URL_ITS	"PKIITS_CMDARG_URL_ITS"
@@ -223,11 +225,16 @@ public:
 #define PKIITS_CMDARG_ITS_AT_VKEY		"PKIITS_CMDARG_ITS_AT_VKEY"
 #define PKIITS_CMDARG_ITS_AT_EKEY		"PKIITS_CMDARG_ITS_AT_EKEY"
 #define PKIITS_CMDARG_ITS_AT_EKEY_ENABLE	"PKIITS_CMDARG_ITS_AT_EKEY_ENABLE"
-#define PKIITS_CMDARG_AID_SSP		"PKIITS_CMDARG_AID_SSP"
-#define PKIITS_CMDARG_APP_PERMS_PSID	"PKIITS_CMDARG_APP_PERMS_PSID"
-#define PKIITS_CMDARG_APP_PERMS_SSP_OPAQUE	"PKIITS_CMDARG_APP_PERMS_SSP_OPAQUE"
-#define PKIITS_CMDARG_APP_PERMS_SSP_BITMAP	"PKIITS_CMDARG_APP_PERMS_SSP_BITMAP"
-#define PKIITS_CMDARG_ITS_CANONICAL_ID	"PKIITS_CMDARG_ITS_CANONICAL_ID" 
+#define PKIITS_CMDARG_AID_SSP			"PKIITS_CMDARG_AID_SSP"
+#define PKIITS_CMDARG_EC_PSIDSSP_SEQ		"PKIITS_CMDARG_EC_PSIDSSP_SEQ"
+#define PKIITS_CMDARG_AT_PSIDSSP_SEQ		"PKIITS_CMDARG_AT_PSIDSSP_SEQ"
+#define PKIITS_CMDARG_ITS_NEED_TO_REGISTER	"PKIITS_CMDARG_ITS_NEED_TO_REGISTER"
+#define PKIITS_CMDARG_ITS_NEED_EC_ENROLLMENT	"PKIITS_CMDARG_ITS_NEED_EC_ENROLLMENT"
+#define PKIITS_CMDARG_ITS_CANONICAL_ID		"PKIITS_CMDARG_ITS_CANONICAL_ID" 
+#define PKIITS_CMDARG_ITS_NAME_HEADER		"PKIITS_CMDARG_ITS_NAME_HEADER" 
+
+#define PKIITS_CMDARG_THREADS	"PKIITS_CMDARG_THREADS"
+#define PKIITS_CMDARG_CYCLES_PER_THREAD	"PKIITS_CMDARG_CYCLES_PER_THREAD"
 
 #define PKIITS_CMDARG_	"PKIITS_CMDARG_"
 

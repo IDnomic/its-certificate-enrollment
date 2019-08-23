@@ -49,6 +49,10 @@ inline bool encInnerEcRequest(EtsiTs102941TypesEnrolment::InnerEcRequest &obj, O
 	ttcn_buf.get_string(ret);
 	return ret.is_bound();
 };
+inline bool encPublicKeys(EtsiTs102941BaseTypes::PublicKeys &obj, OCTETSTRING &ret) {
+	EtsiTs102941BaseTypes::PublicKeys_encoder(obj, ret, "OER");
+	return ret.is_bound();
+};
 inline bool encPublicVerificationKey(IEEE1609dot2BaseTypes::PublicVerificationKey &obj, OCTETSTRING &ret) {
 	IEEE1609dot2BaseTypes::PublicVerificationKey_encoder(obj, ret, "OER");
 	return ret.is_bound();

@@ -10,7 +10,7 @@ pkg_check_modules(ETSITS102941 REQUIRED EtsiTs102941)
 add_executable( unit_tests
     itspki-tests.cpp
     itspki-cmd-args.cpp
-    itspki-tools.cpp
+    itspki-common.cpp
     )
 
 
@@ -25,7 +25,8 @@ target_compile_options(unit_tests PUBLIC ${OPENSSL_LIBCRYPTO_CFLAGS_OTHER})
 target_link_libraries(
     unit_tests
     gtest_main
-    libitspki_static
+    # libitspki_static
+    libitspki_debug_static
     -lboost_program_options
     -lxml2 -lpthread -lrt -lncurses
     -lcrypto
@@ -35,7 +36,7 @@ target_link_libraries(
 )
 
 target_compile_options( unit_tests PRIVATE ${TTCN3_CFLAGS} ${ETSITS102941_CFLAGS} ${YAML_CPP_CFLAGS} ${OPENSSL_LIBCRYPTO_CFLAGS} )
-target_compile_definitions( unit_tests PUBLIC ITSPKI_CONFIG_FILE="${PROJECT_BINARY_DIR}/config.h")
+target_compile_definitions( unit_tests PUBLIC ITSPKI_CONFIG_FILE="${PROJECT_BINARY_DIR}/config.h" ITS_PKI_DEBUG)
 target_link_libraries( unit_tests ${YAML_CPP_LDFLAGS} ${TTCN3_LDFLAGS} ${ETSITS102941_LDFLAGS} ${YAML_CPP_LDFLAGS})
 
 add_test(

@@ -38,4 +38,14 @@ int  OpenSSL_txt2nid(const char *);
 void OpenSSL_setup(void);
 void OpenSSL_cleanup(void);
 
+bool OpenSSL_Verify(void *key, OCTETSTRING &r, OCTETSTRING &s, OCTETSTRING &data);
+bool IEEE1609dot2_VerifyWithSha256(void *key, OCTETSTRING &r, OCTETSTRING &s, OCTETSTRING &data, OCTETSTRING &signer);
+bool IEEE1609dot2_VerifyWithSha384(void *key, OCTETSTRING &r, OCTETSTRING &s, OCTETSTRING &data, OCTETSTRING &signer);
+
+#if 0
+bool myECKey_DerivateSKey_aes128ccm(void *in_eckey,
+		const OCTETSTRING &x, const OCTETSTRING &y,
+		const OCTETSTRING &enc_sym_key, const OCTETSTRING &expected_nonce,
+		const OCTETSTRING &authentication_vector, const OCTETSTRING &salt);
+#endif
 #endif // UTILS_OPENSSL_HH

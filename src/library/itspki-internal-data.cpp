@@ -2,7 +2,6 @@
 #include <vector>
 #include <iterator>
 #include <iostream>
-// #include <boost/program_options.hpp>
 
 #include "its/utils.hh"
 #include "its/itspki-debug.hh"
@@ -80,22 +79,11 @@ ItsPkiInternalData::SetCanonicalID(const std::string &id, const std::string &nm_
 
 ItsPkiInternalData::~ItsPkiInternalData()
 {
-#if 0
-	if (ec_psid_ssp)
-		free(ec_psid_ssp);
-
-	if (at_psid_ssp)
-		free(at_psid_ssp);
-#endif
 	ECKey_Free(technicalKey);
 	ECKey_Free(itsEcVerificationKey);
 	ECKey_Free(itsEcEncryptionKey);
 	ECKey_Free(itsAtVerificationKey);
 	ECKey_Free(itsAtEncryptionKey);
-	ECKey_Free(eaVerificationKey);
-	ECKey_Free(eaEncryptionKey);
-	ECKey_Free(aaVerificationKey);
-	ECKey_Free(aaEncryptionKey);
 }
 
 
@@ -186,77 +174,7 @@ ItsPkiInternalData::AddAidSsp(IEEE1609dot2BaseTypes::SequenceOfPsidSsp &psidssp_
 
 
 bool
-ItsPkiInternalData::IEEE1609dot2_Sign(OCTETSTRING &data, OCTETSTRING &signer,
-		void *key,
-		OCTETSTRING &rSig, OCTETSTRING &sSig)
-{
-	DEBUGC_STREAM_CALLED;
-
-	switch (GetHashAlgorithm())   {
-	case IEEE1609dot2BaseTypes::HashAlgorithm::sha256:
-		if (!IEEE1609dot2_SignWithSha256(data, signer, key, rSig, sSig))   {
-			ERROR_STREAMC << "IEEE1609dot2 SHA256 signature failed" << std::endl;
-			return false;
-		}
-		break;
-	case IEEE1609dot2BaseTypes::HashAlgorithm::sha384:
-		if (!IEEE1609dot2_SignWithSha384(data, signer, key, rSig, sSig))   {
-			ERROR_STREAMC << "IEEE1609dot2 SHA384 signature failed" << std::endl;
-			return false;
-		}
-		break;
-	default:
-		ERROR_STREAMC << "Unsupporteds hash algorithm" << GetHashAlgorithm() << std::endl;
-		return false;
-	}
-
-	DEBUGC_STREAM_RETURNS_OK;
-	return true;
-}
-
-#if 0
-bool
-ItsPkiInternalData::getCertId(OCTETSTRING &cert_raw, OCTETSTRING &ret_certId)
-{
-	DEBUGC_STREAM_CALLED;
-	
-	IEEE1609dot2::module_object.pre_init_module();
-	IEEE1609dot2BaseTypes::module_object.pre_init_module();
-
-	IEEE1609dot2::CertificateBase cert = decEtsiTs103097Certificate(cert_raw);
-
-	IEEE1609dot2::VerificationKeyIndicator vKeyIndicator = cert.toBeSigned().verifyKeyIndicator();
-	if (!vKeyIndicator.ischosen(IEEE1609dot2::VerificationKeyIndicator::ALT_verificationKey))   {
-		ERROR_STREAMC << "ItsPkiInternalData::SetCertID() not supported type of VerificationKeyIndicator" << std::endl;
-		return false;	
-	}
-
-	IEEE1609dot2BaseTypes::PublicVerificationKey pubKey = vKeyIndicator.verificationKey();
-	if (pubKey.ischosen(IEEE1609dot2BaseTypes::PublicVerificationKey::ALT_ecdsaNistP256) || 
-			pubKey.ischosen(IEEE1609dot2BaseTypes::PublicVerificationKey::ALT_ecdsaBrainpoolP256r1))   {
-		if (!OpenSSL_SHA256_HashedID(cert_raw, ret_certId))   {
-			ERROR_STREAMC << "ItsPkiInternalData::SetCertID() OpenSSL SHA256 HashedID failed" << std::endl;
-			return false;
-		}
-	}
-	else if (pubKey.ischosen(IEEE1609dot2BaseTypes::PublicVerificationKey::ALT_ecdsaBrainpoolP384r1))   {
-		if (!OpenSSL_SHA384_HashedID(cert_raw, ret_certId))   {
-			ERROR_STREAMC << "ItsPkiInternalData::SetCertID() OpenSSL SHA384 HashedID failed" << std::endl;
-			return false;
-		}
-	}
-	else   {
-		ERROR_STREAMC << "ItsPkiInternalData::setEncryptionKey() not supported PublicVerificationKey type" << std::endl;
-		return false;	
-	}
-
-	DEBUGC_STREAM_RETURNS_OK;
-	return true;
-}
-#endif
-
-bool
-ItsPkiInternalData::setEncryptionKey(OCTETSTRING &cert_raw, void **ret_key)
+ItsPkiInternalData::getEncryptionKeyFromCertificate(OCTETSTRING &cert_raw, void **ret_key)
 {
 	DEBUGC_STREAM_CALLED;
 	
@@ -316,27 +234,102 @@ ItsPkiInternalData::setEncryptionKey(OCTETSTRING &cert_raw, void **ret_key)
 	return true;
 }
 
+bool
+ItsPkiInternalData::getVerificationKeyFromCertificate(OCTETSTRING &cert_raw, void **ret_key)
+{
+	DEBUGC_STREAM_CALLED;
+	
+	IEEE1609dot2::CertificateBase cert = decEtsiTs103097Certificate(cert_raw);
+	if (!cert.toBeSigned().verifyKeyIndicator().ischosen(IEEE1609dot2::VerificationKeyIndicator::ALT_verificationKey))   {
+		ERROR_STREAMC << "Not supported Verification Key Indicator type: " << cert.toBeSigned().verifyKeyIndicator().get_selection() << std::endl;
+		return false;
+	}
+	IEEE1609dot2BaseTypes::PublicVerificationKey pubKey = cert.toBeSigned().verifyKeyIndicator().verificationKey();
+
+	int nid;
+	IEEE1609dot2BaseTypes::EccP256CurvePoint ecCurvePointP256;
+	IEEE1609dot2BaseTypes::EccP384CurvePoint ecCurvePointP384;
+	if (pubKey.ischosen(IEEE1609dot2BaseTypes::PublicVerificationKey::ALT_ecdsaNistP256))   {
+		DEBUGC_STREAM << "Verification key NistP256" << std::endl;
+		ecCurvePointP256 = pubKey.ecdsaNistP256();
+		nid = NID_X9_62_prime256v1;
+	}
+	else if (pubKey.ischosen(IEEE1609dot2BaseTypes::PublicVerificationKey::ALT_ecdsaBrainpoolP256r1))   {
+		DEBUGC_STREAM << "Verification key BrainpoolP256r1" << std::endl;
+		ecCurvePointP256 = pubKey.ecdsaBrainpoolP256r1();
+		nid = NID_brainpoolP256r1;
+	}
+	else if (pubKey.ischosen(IEEE1609dot2BaseTypes::PublicVerificationKey::ALT_ecdsaBrainpoolP384r1))   {
+		DEBUGC_STREAM << "Verification key BrainpoolP384r1" << std::endl;
+		ecCurvePointP384 = pubKey.ecdsaBrainpoolP384r1();
+		nid = NID_brainpoolP384r1;
+	}
+	else   {
+		ERROR_STREAMC << "ItsPkiInternalData::setEncryptionKey() invalid EC key type" << std::endl;
+		return false;
+	}
+
+	int y_bit = -1;
+	OCTETSTRING comp, x, y;
+	if (nid == NID_X9_62_prime256v1 || nid == NID_brainpoolP256r1)   {
+		if (ecCurvePointP256.ischosen(IEEE1609dot2BaseTypes::EccP256CurvePoint::ALT_compressed__y__0))   {
+			comp = ecCurvePointP256.compressed__y__0();
+			y_bit = 0;
+		}
+		else if (ecCurvePointP256.ischosen(IEEE1609dot2BaseTypes::EccP256CurvePoint::ALT_compressed__y__1))   {
+			comp = ecCurvePointP256.compressed__y__1();
+			y_bit = 1;
+		}
+		else if (ecCurvePointP256.ischosen(IEEE1609dot2BaseTypes::EccP256CurvePoint::ALT_uncompressedP256))   {
+			x = ecCurvePointP256.uncompressedP256().x();
+			y = ecCurvePointP256.uncompressedP256().y();
+		}
+		else   {
+			ERROR_STREAMC << "unsupported EccP256CurvePoint choice" << std::endl;
+			return false;
+		}
+	}
+	else   {
+		if (ecCurvePointP384.ischosen(IEEE1609dot2BaseTypes::EccP384CurvePoint::ALT_compressed__y__0))   {
+			comp = ecCurvePointP384.compressed__y__0();
+			y_bit = 0;
+		}
+		else if (ecCurvePointP384.ischosen(IEEE1609dot2BaseTypes::EccP384CurvePoint::ALT_compressed__y__1))   {
+			comp = ecCurvePointP384.compressed__y__1();
+			y_bit = 1;
+		}
+		else if (ecCurvePointP384.ischosen(IEEE1609dot2BaseTypes::EccP384CurvePoint::ALT_uncompressedP384))   {
+			x = ecCurvePointP384.uncompressedP384().x();
+			y = ecCurvePointP384.uncompressedP384().y();
+		}
+		else   {
+			ERROR_STREAMC << "unsupported EccP384CurvePoint choice" << std::endl;
+			return false;
+		}
+	}
+
+	if (!ECKey_PublicKeyFromComponents(nid, x, y, comp, y_bit, ret_key))   {
+		ERROR_STREAMC << "ItsPkiInternalData::setEncryptionKey() failed to set EC PublicKey from componets" << std::endl;
+		return false;
+	}
+
+	DEBUGC_STREAM_RETURNS_OK;
+	return true;
+}
+
 
 bool
-ItsPkiInternalData::SetEAEncryptionKey(OCTETSTRING &data)
+ItsPkiInternalData::SetEAEncryptionKey(OCTETSTRING &cert_blob)
 {
 	DEBUGC_STREAM_CALLED;
 
-	if (eaEncryptionKey != NULL)
-		ECKey_Free(eaEncryptionKey);
-	eaEncryptionKey = NULL;
-
-	if (!ItsPkiInternalData::setEncryptionKey(data, &eaEncryptionKey))   {
-		DEBUGC_STREAM << "ItsPkiInternalData::setEACertificate() cannot set EA encryption key" << std::endl;
-		return false;
-	}
-	if (!getEtsiTs103097CertId(data, eaId))   {
+	if (!getEtsiTs103097CertId(cert_blob, eaId))   {
 		DEBUGC_STREAM << "ItsPkiInternalData::setEACertificate() cannot set ID of EA certificate" << std::endl;
 		return false;
 	}
 	dump_ttcn_object(eaId, "EA ID: ");
 
-	eaCert_blob = data;
+	eaCert_blob = cert_blob;
 
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
@@ -344,25 +337,17 @@ ItsPkiInternalData::SetEAEncryptionKey(OCTETSTRING &data)
 
 
 bool
-ItsPkiInternalData::SetAAEncryptionKey(OCTETSTRING &data)
+ItsPkiInternalData::SetAAEncryptionKey(OCTETSTRING &cert_blob)
 {
 	DEBUGC_STREAM_CALLED;
 	
-	if (aaEncryptionKey != NULL)
-		ECKey_Free(aaEncryptionKey);
-	aaEncryptionKey = NULL;
-
-	if (!ItsPkiInternalData::setEncryptionKey(data, &aaEncryptionKey))   {
-		DEBUGC_STREAM << "ItsPkiInternalData::setAACertificate() cannot set AA encryption key" << std::endl;
-		return false;
-	}
-	if (!getEtsiTs103097CertId(data, aaId))   {
+	if (!getEtsiTs103097CertId(cert_blob, aaId))   {
 		DEBUGC_STREAM << "ItsPkiInternalData::setAACertificate() cannot set ID of AA certificate" << std::endl;
 		return false;
 	}
 	dump_ttcn_object(aaId, "AA ID: ");
 	
-	aaCert_blob = data;
+	aaCert_blob = cert_blob;
 
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
@@ -370,18 +355,18 @@ ItsPkiInternalData::SetAAEncryptionKey(OCTETSTRING &data)
 
 
 bool
-ItsPkiInternalData::SetItsEcId(OCTETSTRING &data)
+ItsPkiInternalData::SetItsEcId(OCTETSTRING &cert_blob)
 {
 	DEBUGC_STREAM_CALLED;
 	
-	if (!getEtsiTs103097CertId(data, itsEcId))   {
+	if (!getEtsiTs103097CertId(cert_blob, itsEcId))   {
 		DEBUGC_STREAM << "ItsPkiInternalData::getCertId(() cannot set Its Ec ID" << std::endl;
 		return false;
 	}
 
 	dump_ttcn_object(itsEcId, "Its Ec ID: ");
 	
-	itsEcCert_blob = data;
+	itsEcCert_blob = cert_blob;
 	
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
@@ -396,47 +381,8 @@ ItsPkiInternalData::init()
 	IEEE1609dot2::module_object.pre_init_module();
 	IEEE1609dot2BaseTypes::module_object.pre_init_module();
 	EtsiTs103097Module::module_object.pre_init_module();
-
-	// psid_ssp.psid = 0;
-	// psid_ssp.type = IEEE1609dot2BaseTypes::ServiceSpecificPermissions::UNBOUND_VALUE;
-	// psid_ssp.ssp = OCTETSTRING(0, NULL);
 	hash_algorithm = IEEE1609dot2BaseTypes::HashAlgorithm::UNBOUND_VALUE;
 }
-
-
-#if 0
-bool
-ItsPkiInternalData::ParseItsRegisterCmdArguments(ItsPkiCmdArguments &cmd_args)
-{
-	DEBUGC_STREAM_CALLED;
-
-	technicalKey = ECKey_GeneratePrivateKey();
-	if (technicalKey == NULL)   {
-		ERROR_STREAMC << "Failed to generate technical key" << std::endl;
-		return false;
-	}
-
-	if (!CreateCanonicalID(cmd_args))   {
-		ERROR_STREAMC << "Cannot create ITS canonical ID " << std::endl;
-		return false;
-	}
-	DEBUGC_STREAM << "Canonical ID '" << its_canonical_id  << "'" << std::endl;
-
-	if (!cmd_args.its_tkey.empty())
-		saveTechnicalKeyFile = cmd_args.its_tkey;
-	else
-		saveTechnicalKeyFile = its_canonical_id + "-technical-key.pem";
-	
-	if (cmd_args.profile.empty())   {
-		ERROR_STREAMC << "Missing mandatory 'profile' argument" << std::endl;
-		return false;
-	}
-	profile = cmd_args.profile;
-	
-	DEBUGC_STREAM_RETURNS_OK;
-	return true;
-}
-#endif
 
 
 bool
@@ -448,17 +394,7 @@ ItsPkiInternalData::CheckItsRegisterData()
 		ERROR_STREAM << "Its register: missing or invalid 'profile'" << std::endl;
 		return false;
 	}
-#if 0
-	if (technicalKey == NULL)   {
-		ERROR_STREAMC << "Its register: Missing or invalid technical key" << std::endl;
-		return false;
-	}
-
-	if (its_canonical_id.empty())   {
-		ERROR_STREAMC << "Its register: ITS canonical ID do not set" << std::endl;
-		return false;
-	}
-#endif
+	
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
 }
@@ -473,10 +409,7 @@ ItsPkiInternalData::CheckEnrollmentDataEA()
 		ERROR_STREAMC << "invalid EA certificate blob" << std::endl;
 		return false;
 	}
-	if (eaEncryptionKey == NULL)   {
-		ERROR_STREAMC << "EA encryption key do not set" << std::endl;
-		return false;
-	}
+	
 	if (!eaId.is_bound() || eaId.lengthof() == 0)   {
 		ERROR_STREAMC << "EA ID do not set" << std::endl;
 		return false;
@@ -496,10 +429,12 @@ ItsPkiInternalData::CheckEnrollmentDataAA()
 		ERROR_STREAMC << "invalid AA certificate blob" << std::endl;
 		return false;
 	}
+#if 0
 	if (aaEncryptionKey == NULL)   {
 		ERROR_STREAMC << "AA encryption key do not set" << std::endl;
 		return false;
 	}
+#endif
 	if (!aaId.is_bound() || aaId.lengthof() == 0)   {
 		ERROR_STREAMC << "AA ID do not set" << std::endl;
 		return false;
@@ -534,26 +469,7 @@ bool
 ItsPkiInternalData::CheckEcEnrollmentArguments()
 {
 	DEBUGC_STREAM_CALLED;
-#if 0	
-	if (technicalKey == NULL)   {
-		ERROR_STREAMC << "EC enroll: Missing or invalid technical key" << std::endl;
-		return false;
-	}
-	if (its_canonical_id.empty())   {
-		ERROR_STREAMC << "EC enroll: ITS canonical ID do not set" << std::endl;
-		return false;
-	}
-	if (itsEcEncryptionKeyEnable)   {
-		if (itsEcEncryptionKey == NULL)   {
-			ERROR_STREAMC << "EC enroll: cannot read from file, base64 string or generate the EC encryption key "<< std::endl;
-			return false;
-		}
-	}
-	if (itsEcVerificationKey == NULL)   {
-		ERROR_STREAMC << "EC enroll: cannot read from file, base64 string or generate the EC verification key "<< std::endl;
-		return false;
-	}
-#endif
+	
 	if (!CheckEnrollmentDataEA())   {
 		ERROR_STREAMC << "EC enroll: invalid EA parameters" << std::endl;
 		return false;
@@ -576,16 +492,6 @@ ItsPkiInternalData::CheckAtEnrollmentArguments()
 {
 	DEBUGC_STREAM_CALLED;
 
-#if 0	
-	if (itsAtEncryptionKey == NULL)   {
-		ERROR_STREAMC << "At enrollment internal data: needs ITS AT encryption key " << std::endl;
-		return false;
-	}
-	if (itsAtVerificationKey == NULL)   {
-		ERROR_STREAMC << "At enroll internal data: needs ITS AT verification key" << std::endl;
-		return false;
-	}
-#endif
 	if (!CheckEnrollmentDataEA())   {
 		ERROR_STREAMC << "At enroll: invalid EA parameters" << std::endl;
 		return false;
@@ -594,20 +500,6 @@ ItsPkiInternalData::CheckAtEnrollmentArguments()
 		ERROR_STREAMC << "At enroll: invalid AA parameters" << std::endl;
 		return false;
 	}
-#if 0
-	if (!CheckEnrollmentDataItsEc())   {
-		ERROR_STREAMC << "At enroll: invalid ITS EC data" << std::endl;
-		return false;
-	}
-	if (itsEcVerificationKey == NULL)   {
-		ERROR_STREAMC << "At enroll: missing ITS EC verification key" << std::endl;
-		return false;
-	}
-	if (its_canonical_id.empty())   {
-		ERROR_STREAMC << "At enroll: ITS canonical ID do not set" << std::endl;
-		return false;
-	}
-#endif
 	if (!AtCheckAidSsp())   {
 		ERROR_STREAMC << "at enroll: invalid ITS AID SSP" << std::endl;
 		return false;
@@ -620,46 +512,3 @@ ItsPkiInternalData::CheckAtEnrollmentArguments()
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
 }
-
-#if 0
-bool
-ItsPkiInternalData::GetItsRegisterRequest(std::string &request_str)
-{
-	DEBUGC_STREAM_CALLED;
-
-	if (technicalKey == NULL)   {
-		ERROR_STREAMC << "no Technical Key" << std::endl;
-		return false;
-	}
-	else if (its_canonical_id.empty())   {
-		ERROR_STREAMC << "no canonical ID" << std::endl;
-		return false;
-	}
-	else if (profile.empty())   {
-		ERROR_STREAMC << "no profile" << std::endl;
-		return false;
-	}
-
-        unsigned char *key_b64 = NULL;
-        size_t key_b64_len = 0;
-
-        if (ECKey_PublicKeyToMemory(technicalKey, &key_b64, &key_b64_len))   {
-		ERROR_STREAMC << "cannot write public key to memory" << std::endl;
-                return false;
-        }
-
-        request_str = std::string("{")  
-                + "\"canonicalId\":\"" + its_canonical_id + "\","
-                + "\"profile\":\"" + profile + "\","
-                + "\"technicalPublicKey\":\"" + (char *)key_b64 + "\","
-                + "\"status\":\"ACTIVATED\""
-                + "}";
-
-	DEBUGC_STREAM << "ITS REGISTER request: " <<  request_str << std::endl;
-        free(key_b64);
-        key_b64 = NULL;
-
-	DEBUGC_STREAM_RETURNS_OK;
-        return true;
-}
-#endif
