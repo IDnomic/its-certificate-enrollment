@@ -16,6 +16,8 @@
 #include <IEEE1609dot2BaseTypes.hh>
 
 #define DEFAULT_ITS_CANONICAL_ID_HEADER "BENCH-SCOOP-ITS"
+#define DEFAULT_ITS_EC_CERT_DURATION_YEARS (3)
+#define DEFAULT_ITS_AT_CERT_DURATION_MINS (60*24)
 
 class ItsPkiInternalData {
 public:
@@ -42,8 +44,18 @@ private:
 	std::string log_line_header;
 
 	unsigned char *ecid = NULL;
-    	std::string its_canonical_id;
-    	std::string its_name_header;
+
+	IEEE1609dot2BaseTypes::Duration ItsEcCertDuration;
+	int ItsEcCertValidFrom = 0;
+
+	IEEE1609dot2BaseTypes::Duration ItsAtCertDuration;
+	int ItsAtCertValidFrom = 0;
+
+	OCTETSTRING its_cid;
+	std::string its_pid;
+	OCTETSTRING its_sid;
+	bool generate_its_sid = false;
+
 	std::string profile;
 	
 	IEEE1609dot2BaseTypes::SequenceOfPsidSsp ec_ssp_seq;
@@ -97,16 +109,20 @@ private:
 	bool AddAidSsp(IEEE1609dot2BaseTypes::SequenceOfPsidSsp &, const long, const std::string &, const std::string &);
 	bool AddAidSsp(IEEE1609dot2BaseTypes::SequenceOfPsidSsp &, std::string &);
 
+	bool SetDuration(int num, IEEE1609dot2BaseTypes::Duration::union_selection_type units, IEEE1609dot2BaseTypes::Duration &duration);
+
 public:
 	ItsPkiInternalData();
 	~ItsPkiInternalData();
 	const char *GetClassName() {return CLASS_NAME.c_str();};
 	
-	bool SetItsNameHeader(const std::string &);
-	std::string GetItsNameHeader() { return its_name_header; };
+	bool SetItsCanonicalID(const std::string &, const std::string &, const std::string &, void *);
+	OCTETSTRING GetItsCanonicalId() {
+		return its_cid.is_bound() ? its_cid : OCTETSTRING(0, (const unsigned char *)"");
+	};
+	std::string GetItsPrefixId()    { return its_pid; };
+	OCTETSTRING & GetItsSerialId()    { return its_sid; };
 
-	bool SetCanonicalID(const std::string &, const std::string &, void *);
-	std::string GetCanonicalId() { return its_canonical_id; };
 
 	bool SetProfile(const std::string &_profile) {profile = _profile; return true;};
 	std::string GetProfile() { return profile; };
@@ -130,53 +146,30 @@ public:
 		technicalKey = key;
 		return (key != NULL);
 	};
-	void *GetItsTechnicalKey() {
-		return technicalKey;
-	};
+	void *GetItsTechnicalKey() { return technicalKey; };
 
-	void SetItsEcVerificationKey(void *key) {
-		itsEcVerificationKey = key;
-	};
-	void *GetItsEcVerificationKey() {
-		return itsEcVerificationKey;
-	};
+	void SetItsEcVerificationKey(void *key) { itsEcVerificationKey = key; };
+	void *GetItsEcVerificationKey() { return itsEcVerificationKey; };
 	
 	void SetItsEcEncryptionKey(void *key) {
 		itsEcEncryptionKey = key;
-		if (key != NULL) itsEcEncryptionKeyEnable = true;
+		itsEcEncryptionKeyEnable = (key != NULL);
 	};
-	void SetItsEcEncryptionKeyEnable(bool enable) {
-		itsEcEncryptionKeyEnable = enable;
-	}
-	void *GetItsEcEncryptionKey() {
-		return (itsEcEncryptionKeyEnable ? itsEcEncryptionKey : NULL);
-	};
-	bool IsItsEcEncryptionKeyEnabled() {
-		return itsEcEncryptionKeyEnable;
-	}
+	void SetItsEcEncryptionKeyEnable(bool enable) { itsEcEncryptionKeyEnable = enable; }
+	void *GetItsEcEncryptionKey() { return (itsEcEncryptionKeyEnable ? itsEcEncryptionKey : NULL); };
+	bool IsItsEcEncryptionKeyEnabled() { return itsEcEncryptionKeyEnable; }
 
 	bool SetEAEncryptionKey(OCTETSTRING &);
 
-	void SetItsAtVerificationKey(void *key) {
-		itsAtVerificationKey = key;
-	};
-	void *GetItsAtVerificationKey() {
-		return itsAtVerificationKey;
-	};
+	void SetItsAtVerificationKey(void *key) { itsAtVerificationKey = key; };
+	void *GetItsAtVerificationKey() { return itsAtVerificationKey; };
 	
-	void SetItsAtEncryptionKey(void *key) {
-		itsAtEncryptionKey = key;
-		if (key != NULL) itsAtEncryptionKeyEnable = true;
+	void SetItsAtEncryptionKey(void *key) { itsAtEncryptionKey = key;
+		//itsAtEncryptionKeyEnable = (key != NULL);
 	};
-	void *GetItsAtEncryptionKey() {
-		return (itsAtEncryptionKeyEnable ? itsAtEncryptionKey : NULL);
-	};
-	void SetItsAtEncryptionKeyEnable(bool enable) {
-		itsAtEncryptionKeyEnable = enable;
-	}
-	bool IsItsAtEncryptionKeyEnabled() {
-		return itsAtEncryptionKeyEnable;
-	}
+	void *GetItsAtEncryptionKey() { return (itsAtEncryptionKeyEnable ? itsAtEncryptionKey : NULL); };
+	void SetItsAtEncryptionKeyEnable(bool enable) { itsAtEncryptionKeyEnable = enable; }
+	bool IsItsAtEncryptionKeyEnabled() { return itsAtEncryptionKeyEnable; }
 
 	bool SetAAEncryptionKey(OCTETSTRING &);
 
@@ -201,6 +194,17 @@ public:
 	bool getEncryptionKeyFromCertificate(OCTETSTRING &, void **);
 	bool getVerificationKeyFromCertificate(OCTETSTRING &, void **);
 
+	bool IsGenerateItsSerialId()   { return generate_its_sid; };
+
+	bool SetItsEcCertDuration(int num, IEEE1609dot2BaseTypes::Duration::union_selection_type units) { return SetDuration(num, units, ItsEcCertDuration); };
+	bool SetItsAtCertDuration(int num, IEEE1609dot2BaseTypes::Duration::union_selection_type units) { return SetDuration(num, units, ItsAtCertDuration); };
+	void SetItsEcCertValidFrom(int num) { ItsEcCertValidFrom = num; };
+	void SetItsAtCertValidFrom(int num) { ItsAtCertValidFrom = num; };
+
+	IEEE1609dot2BaseTypes::Duration &GetItsEcCertDuration(void) { return ItsEcCertDuration; } ;
+	IEEE1609dot2BaseTypes::Duration &GetItsAtCertDuration(void) { return ItsAtCertDuration; } ;
+	int GetItsEcCertValidFrom() { return ItsEcCertValidFrom; };
+	int GetItsAtCertValidFrom() { return ItsAtCertValidFrom; };
 	int debug = 0;
 };
 

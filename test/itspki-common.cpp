@@ -15,119 +15,8 @@
 
 #include "itspki-cmd-args.hh"
 #include "itspki-common.hh"
-// #include "utils-curl.hh"
 
-// using namespace boost::program_options;
-// namespace po  = boost::program_options;
-
-#if 0
-#define BENCH_DATA_MAGIC 0xEC6E4513
-struct bench_data {
-	const char *url;
-	const char *url_report;
-	long cycles_num;
-
-	unsigned magic;
-};
-
-pthread_mutex_t mutex_print = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t mutex_counter = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t mutex_ttcn = PTHREAD_MUTEX_INITIALIZER;
-
-static int thread_counter = 0;
-
-bool
-ItsRegisterRequest_Process(const char *user_password, const char *url, const char *url_report,
-                ItsPkiInternalData &idata, ItsPkiSession &session)
-{
-        DEBUG_STREAM_CALLED;
-
-        OCTETSTRING request;
-        if (!session.ItsRegisterRequest_Create(idata, request))  {
-                ERROR_STREAM << "Cannot compose ItsRegister request" << std::endl;
-                return false;
-        }
-        dump_ttcn_object(request, "its register request: ");
-
-        OCTETSTRING response_raw;
-	std::string identity = session.sessionGetCanonicalId(idata);
-        if (!Curl_Send(url, NULL, JSON, user_password, request, response_raw, NULL))   {
-                ERROR_STREAM << "request send error" << std::endl;
-                return false;
-        }
-        dump_ttcn_object(response_raw, "its register response: ");
-
-        OCTETSTRING cert_encoded;
-        if (!session.ItsRegisterResponse_Parse(response_raw, cert_encoded))   {
-                ERROR_STREAM << "cannot parse ItsRegister response" << std::endl;
-                return false;
-        }
-        
-	DEBUG_STREAM_RETURNS_OK;
-        return true;
-}
-
-
-bool
-EcEnrollmentRequest_Process(const std::string &url_ea, const std::string &url_es,
-		ItsPkiInternalData &idata, ItsPkiSession &session)
-{
-        DEBUG_STREAM_CALLED;
-
-        OCTETSTRING data_encrypted;
-        if (!session.EcEnrollmentRequest_Create(idata, data_encrypted))   {
-                ERROR_STREAM << "Create EC enrollment request failed" << std::endl;
-                return false;
-        }
-
-        OCTETSTRING response_raw;
-	const std::string identity = session.sessionGetCanonicalId(idata);
-	if (!Curl_Send_ItsRequest(url_ea.c_str(), data_encrypted, response_raw, NULL))   {
-                ERROR_STREAM << "request send error" << std::endl;
-                return false;
-	}
-
-        OCTETSTRING cert_encoded;
-        if (!session.EcEnrollmentResponse_Parse(response_raw, cert_encoded))   {
-                ERROR_STREAM << "parse response error" << std::endl;
-                return false;
-        }
-
-        DEBUG_STREAM_RETURNS_OK;
-        return true;
-}
-
-
-bool
-AtEnrollmentRequest_Process(const std::string &url_at, const std::string &url_es,
-		ItsPkiInternalData &idata, ItsPkiSession &session)
-{
-        DEBUG_STREAM_CALLED;
-
-        OCTETSTRING atRequest_encoded;
-        if (!session.AtEnrollmentRequest_InnerAtRequest(idata, atRequest_encoded))  {
-                ERROR_STREAM << "Cannot compose AT request" << std::endl;
-                return false;
-        }
-
-        OCTETSTRING response_raw;
-	const std::string identity = session.sessionGetCanonicalId(idata);
-	if (!Curl_Send_ItsRequest(url_at.c_str(), atRequest_encoded, response_raw, NULL))   {
-                ERROR_STREAM << "request send error" << std::endl;
-                return false;
-	}
-        
-	OCTETSTRING cert_encoded;
-        if (!session.AtEnrollmentResponse_Parse(response_raw, cert_encoded))   {
-                ERROR_STREAM << "cannot parse At Enrollment response" << std::endl;
-                return false;
-        }
-
-        DEBUG_STREAM_RETURNS_OK;
-        return true;
-}
-
-#endif
+#include <random>
 
 bool
 ParseItsRegisterCmdArguments(ItsPkiCmdArguments &cmd_args, ItsPkiInternalData &idata)
@@ -158,8 +47,10 @@ ParseItsRegisterCmdArguments(ItsPkiCmdArguments &cmd_args, ItsPkiInternalData &i
 	}
 
 	idata.SetItsRegistrationFlag(cmd_args.its_need_to_register);
+        DEBUG_STREAM << "Is ITS registration needed " << idata.IsItsRegistrationNeeded() << std::endl;
 
-	if (!idata.SetCanonicalID(cmd_args.its_canonical_id, cmd_args.its_name_header, idata.GetItsTechnicalKey()))   {
+        DEBUG_STREAM << "Now set canonical ID" << std::endl;
+	if (!idata.SetItsCanonicalID(cmd_args.its_canonical_id, cmd_args.its_prefix_id, cmd_args.its_serial_id_hex, idata.GetItsTechnicalKey()))   {
                 ERROR_STREAM << "EC enroll arguments: cannot set ITS canonical ID" << std::endl;
                 return false;
         }
@@ -204,6 +95,7 @@ ParseEcEnrollmentCmdArguments(ItsPkiCmdArguments &cmd_args, ItsPkiInternalData &
 
 	// ITS Ec Encryption Key
 	if (cmd_args.its_ec_ekey_enable)   {
+		DEBUG_STREAM << "Ec enroll: use encryption key" << std::endl;
 		idata.SetItsEcEncryptionKeyEnable(true);
 		
 		key = NULL;
@@ -246,11 +138,11 @@ ParseEcEnrollmentCmdArguments(ItsPkiCmdArguments &cmd_args, ItsPkiInternalData &
 	}
 
 	// Create/Set ITS canonical ID
-	if (!idata.SetCanonicalID(cmd_args.its_canonical_id, cmd_args.its_name_header, idata.GetItsTechnicalKey()))   {
+	if (!idata.SetItsCanonicalID(cmd_args.its_canonical_id, cmd_args.its_prefix_id, cmd_args.its_serial_id_hex, idata.GetItsTechnicalKey()))   {
 		ERROR_STREAM << "EC enroll arguments: cannot set ITS canonical ID" << std::endl;
 		return false;
 	}
-	DEBUG_STREAM << "ITS Canonical ID: '" << idata.GetCanonicalId() << "'" << std::endl;
+	DEBUG_STREAM << "ITS Canonical ID: '" << idata.GetItsCanonicalId() << "'" << std::endl;
 
 	DEBUG_STREAM_RETURNS_OK;
 	return true;
@@ -347,11 +239,11 @@ ParseAtEnrollmentCmdArguments(ItsPkiCmdArguments &cmd_args, ItsPkiInternalData &
 		idata.SetItsEcVerificationKey(key);
 
 		// Create/Set ITS canonical ID
-		if (!idata.SetCanonicalID(cmd_args.its_canonical_id, cmd_args.its_name_header, idata.GetItsTechnicalKey()))   {
+		if (!idata.SetItsCanonicalID(cmd_args.its_canonical_id, cmd_args.its_prefix_id, cmd_args.its_serial_id_hex, idata.GetItsTechnicalKey()))   {
 			ERROR_STREAM << "AT enroll arguments: cannot set ITS canonical ID" << std::endl;
 			return false;
 		}
-		DEBUG_STREAM << "ITS Canonical ID: '" << idata.GetCanonicalId() << "'" << std::endl;
+		DEBUG_STREAM << "ITS Canonical ID: '" << printableItsCanonicalId(idata.GetItsCanonicalId()) << "'" << std::endl;
 	}
 	
 	// Set permissions

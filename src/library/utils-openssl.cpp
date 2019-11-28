@@ -1072,11 +1072,18 @@ ECKey_DerivateSKey_aes128ccm(void *in_eckey,
 	}
 
 #ifdef ITS_PKI_DEBUG
+	OCTETSTRING _x = x, _y = y;
+	dump_ttcn_object(_x, "ECKey_DerivateSKey_aes128ccm() Recepient PubKey X: ");
+	dump_ttcn_object(_y, "ECKey_DerivateSKey_aes128ccm() Recepient PubKey Y: ");
 	int prvkey_nid = 0;
 	OCTETSTRING prvkey_x, prvkey_y;
 	ECKey_GetPublicKeyComponents(ec_key, prvkey_nid, prvkey_x, prvkey_y);
-	dump_ttcn_object(prvkey_x, "Private key X: ");
-	dump_ttcn_object(prvkey_y, "Private key Y: ");
+	dump_ttcn_object(prvkey_x, "ECKey_DerivateSKey_aes128ccm() Private key X: ");
+	dump_ttcn_object(prvkey_y, "ECKey_DerivateSKey_aes128ccm() Private key Y: ");
+
+        OCTETSTRING key_id;
+	ECKey_PublicKeyHashedID(ec_key, key_id);
+	dump_ttcn_object(key_id, "ECKey_DerivateSKey_aes128ccm() Private key ID: ");
 #endif
 
 	const EC_GROUP *ec_group = EC_KEY_get0_group(ec_key);

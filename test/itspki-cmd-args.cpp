@@ -60,6 +60,28 @@ notifier_on_input_file(std::string in_file)
 
 
 bool
+splitCanonicalId(std::string &cid, std::string &pid, std::string &sid)
+{
+	size_t pos = cid.rfind('.');
+	if (pos == std::string::npos) 	{
+		pid = cid;
+		sid.erase();
+	}
+	else if (pos == (cid.length() - 1))   {
+		pid = cid.substr(0, pos - 1);
+		sid.erase();
+	}
+	else  {
+		pid = cid.substr(0, pos);
+		sid = cid.substr(pos+1);
+	}
+
+	cid.erase();
+
+	return true;
+}
+
+bool
 ItsPkiCmdArguments::ValidateOperation(void)
 {
 	if (!this->validated)
@@ -115,17 +137,29 @@ ItsPkiCmdArguments::init()
 	its_at_ekey_enable =   !getEnvVar(PKIITS_CMDARG_ITS_AT_EKEY_ENABLE).empty();
 	its_need_to_register = !getEnvVar(PKIITS_CMDARG_ITS_NEED_TO_REGISTER).empty();
 	its_need_ec_enrollment =	!getEnvVar(PKIITS_CMDARG_ITS_NEED_EC_ENROLLMENT).empty();
+
 	its_canonical_id = 	getEnvVar(PKIITS_CMDARG_ITS_CANONICAL_ID);
+	its_serial_id_hex = 	getEnvVar(PKIITS_CMDARG_ITS_SERIAL_ID);
+	its_prefix_id = 	getEnvVar(PKIITS_CMDARG_ITS_PREFIX_ID);
+
 	ec_psidssp_seq =	getEnvVar(PKIITS_CMDARG_EC_PSIDSSP_SEQ);
 	at_psidssp_seq =	getEnvVar(PKIITS_CMDARG_AT_PSIDSSP_SEQ);
 
 	std::cout << "Profile: " << profile << std::endl;
 	std::cout << "its_at_ekey_enable: " << its_at_ekey_enable << std::endl;
 
-	if(!getEnvVar(PKIITS_CMDARG_ITS_NAME_HEADER).empty())
-		its_name_header = getEnvVar(PKIITS_CMDARG_ITS_NAME_HEADER);
-	else
-		its_name_header = std::string("BENCH-ITSPKI-");
+	if (its_prefix_id.empty() && its_serial_id_hex.empty())   {
+		if (!its_canonical_id.empty())   {
+			splitCanonicalId(its_canonical_id, its_prefix_id, its_serial_id_hex);
+		}
+		else   {
+			its_prefix_id.assign("BENCH-ITSPKI-");
+			its_serial_id_hex.assign("generate");
+		}
+	}
+	else   {
+		its_canonical_id.erase();
+	}
 
 	if (!getEnvVar(PKIITS_CMDARG_CYCLES_PER_THREAD).empty())
 		cycles_num = std::stol(getEnvVar(PKIITS_CMDARG_CYCLES_PER_THREAD));
@@ -135,6 +169,10 @@ ItsPkiCmdArguments::init()
 	if (!getEnvVar(PKIITS_CMDARG_THREADS).empty())
 		threads_num = std::stol(getEnvVar(PKIITS_CMDARG_THREADS));
 
+	if (!getEnvVar(PKIITS_CMDARG_TEST_FREQUENCY).empty())
+		test_frequency = std::stof(getEnvVar(PKIITS_CMDARG_TEST_FREQUENCY));
+	else
+		test_frequency = 0.0;
 
 	return true;
 }
@@ -184,8 +222,10 @@ ItsPkiCmdArguments::ItsPkiCmdArguments(int argc, const char *argv[])
 			("ec-psidssp-seq", po::value<std::string>(&this->ec_psidssp_seq), "EC application permission sequence: <int:hex*?, >")
 			("at-psidssp-seq", po::value<std::string>(&this->at_psidssp_seq), "AT application permission sequence: <int:hex*?, >")
 			("validity-restrictions,r", po::value<std::string>(&this->hexvalidityrestrictions), "Validity restrictions <hexadecimal string>")
-			("its-name-header,n", po::value<std::string>(&this->its_name_header), "ITS name header <string>")
-			("canonical-id,c", po::value<std::string>(&this->its_canonical_id), "ITS canonical ID <string>")
+			("canonical-id", po::value<std::string>(&this->its_canonical_id), "ITS canonical ID string <prefix(ascii).serial(hex)>")
+			// ("canonical-id-b64", po::value<std::string>(&this->its_canonical_id_b64), "ITS canonical ID <base 64 string>")
+			("its-prefix_id,n", po::value<std::string>(&this->its_prefix_id), "ITS prefix ID <string>")
+			("its-serial-id", po::value<std::string>(&this->its_serial_id_hex), "ITS serial ID <hex string>")
 			("test-frequency,f", po::value<float>(&this->test_frequency), "Number of request per seconds  <float>")
 			("number-of-cycles", po::value<long>(&this->cycles_num), "Number of tests <long>")
 			("number-of-threads", po::value<long>(&this->threads_num), "Number of concurent threads <long>")

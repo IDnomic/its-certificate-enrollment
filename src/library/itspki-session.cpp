@@ -45,6 +45,25 @@ ItsPkiSession::~ItsPkiSession()
 }
 
 
+OCTETSTRING &
+ItsPkiSession::sessionGetItsCanonicalId()
+{
+        DEBUGC_STREAM_CALLED;
+	if (!its_cid.is_bound() || its_cid.lengthof() == 0)
+		its_cid = idata->GetItsCanonicalId();
+
+        DEBUGC_STREAM_RETURNS_OK;
+	return its_cid;
+}
+
+
+bool
+ItsPkiSession::setSKeyContext(OCTETSTRING &skey_id, OCTETSTRING &aes_key, OCTETSTRING &tag)
+{
+	return etsiServices.setDecryptContextWithSKey(skey_id, aes_key, tag);
+};
+
+
 bool
 ItsPkiSession::GetPublicVerificationKey(void *ec_key, IEEE1609dot2BaseTypes::PublicVerificationKey &pubkey)
 {
@@ -215,6 +234,13 @@ ItsPkiSession::GetIEEE1609dot2Signature(ItsPkiInternalData &idata, OCTETSTRING &
 		return false;
 	}
 
+	OCTETSTRING key_id;
+	if (!ECKey_PublicKeyHashedID(key, key_id))   {
+		ERROR_STREAMC << "Cannot get Key ID" << std::endl;
+		return false;
+	}
+	DEBUGC_STREAM << "Signer Key: '" << oct2str(key_id) << "'" << std::endl;
+
 	int nid = ECKey_GetNid(key);
 
 	OCTETSTRING rSig, sSig;
@@ -272,6 +298,13 @@ ItsPkiSession::IEEE1609dot2_VerifyToBeEncoded(OCTETSTRING &data, OCTETSTRING &si
                 OCTETSTRING &rSig, OCTETSTRING &sSig)
 {
         DEBUGC_STREAM_CALLED;
+
+	OCTETSTRING key_id;
+	if (!ECKey_PublicKeyHashedID(key, key_id))   {
+		ERROR_STREAMC << "Cannot get Key ID" << std::endl;
+		return false;
+	}
+	DEBUGC_STREAM << "Verify Key: '" << oct2str(key_id) << "'" << std::endl;
 
         switch (idata->GetHashAlgorithm())   {
         case IEEE1609dot2BaseTypes::HashAlgorithm::sha256:
@@ -449,6 +482,7 @@ ItsPkiSession::ItsRegisterRequest_Create(ItsPkiInternalData &idata, OCTETSTRING 
 	
 	void *t_key = idata.GetItsTechnicalKey();
 	if (t_key == NULL)   {
+		DEBUGC_STREAM << "Generate session technical key" << std::endl;
 		if (sessionTechnicalKey == NULL)
 			sessionTechnicalKey = ECKey_GeneratePrivateKey(); 
 		t_key = sessionTechnicalKey;
@@ -459,6 +493,7 @@ ItsPkiSession::ItsRegisterRequest_Create(ItsPkiInternalData &idata, OCTETSTRING 
                 return false;
 	}
 
+        DEBUGC_STREAM << "technical key: " << t_key << std::endl;
         unsigned char *key_b64 = NULL;
         size_t key_b64_len = 0;
 
@@ -466,24 +501,54 @@ ItsPkiSession::ItsRegisterRequest_Create(ItsPkiInternalData &idata, OCTETSTRING 
                 ERROR_STREAMC << "cannot write public key to memory" << std::endl;
                 return false;
         }
+        DEBUGC_STREAM << "technical key: " << t_key << std::endl;
+
+	its_pid = idata.GetItsPrefixId();
+	if (!its_pid.empty())
+		its_cid = OCTETSTRING(its_pid.length(), (const unsigned char *)its_pid.c_str());
+	else
+		its_cid = OCTETSTRING(0, NULL);
+
+	if (idata.IsGenerateItsSerialId())   {
+		OCTETSTRING h;
+		if (!ECKey_PublicKeyHashedID(t_key, h))   {
+			ERROR_STREAMC << "cannot get HashedID from EC public key" << std::endl;
+                        return false;
+                }
+
+                its_sid = OCTETSTRING(8, (const unsigned char *)h);
+                DEBUGC_STREAM << "SID:" <<  its_sid << std::endl;
+	}
+	else   {
+		its_sid = idata.GetItsSerialId();
+	}
+
+	its_cid += its_sid;
+	if (its_cid.lengthof() == 0)   {
+                ERROR_STREAMC << "Cannot compose canonical ID" << std::endl;
+                return false;
+	}
+
+	std::string pid = its_pid;
+	CHARSTRING sid = its_sid.lengthof() > 0 ? encode_base64(its_sid) : "";
 
 	std::string request_str = std::string("{")
-                + "\"canonicalId\":\"" + sessionGetCanonicalId(idata) + "\","
+                + "\"prefixId\":\"" + pid + "\","
+                + "\"serialId\":\"" + (const char *)sid + "\","
                 + "\"profile\":\"" + idata.GetProfile() + "\","
                 + "\"technicalPublicKey\":\"" + (char *)key_b64 + "\","
                 + "\"status\":\"ACTIVATED\""
                 + "}";
+        DEBUGC_STREAM << "Its register request: " << request_str << std::endl;
 
-        free(key_b64);
-        key_b64 = NULL;
+	free(key_b64);
+	key_b64 = NULL;
 
 	ret = OCTETSTRING(request_str.length(), (const unsigned char *)request_str.c_str());
 
         DEBUGC_STREAM_RETURNS_OK;
 	return true;
 }
-
-
 
 
 bool
@@ -495,46 +560,15 @@ ItsPkiSession::ItsRegisterResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING 
 	OCTETSTRING decoded = str2oct(oct2str(response_raw));
 	std::string resp((const char *)((const unsigned char *)decoded), decoded.lengthof());
 
-	if (!json_get_tag_value(resp, "id", its_id))   {
+	if (!json_get_tag_value(resp, "id", its_registered_id))   {
 		ERROR_STREAMC << "Invalid ITS registration response: no 'id' tag" << std::endl;
 		return false;
 	}
 
-	ret_its_id = OCTETSTRING(its_id.length(), (const unsigned char *)its_id.c_str());
+	ret_its_id = OCTETSTRING(its_registered_id.length(), (const unsigned char *)its_registered_id.c_str());
 	
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
-}
-
-
-std::string
-ItsPkiSession::sessionGetCanonicalId(ItsPkiInternalData &idata)
-{
-	DEBUGC_STREAM_CALLED;
-
-	std::string ret = idata.GetCanonicalId();
-	if (!ret.empty())
-		return ret;
-
-	void *key = sessionGetTechnicalKey();
-	if (key == NULL)   {
-		ERROR_STREAMC << "failed: no ITS Technical Key" << std::endl;
-		return ret;
-	}
-
-        OCTETSTRING h;
-	if (!ECKey_PublicKeyHashedID(key, h))   {
-		ERROR_STREAMC << "cannot get HashedID from EC public key" << std::endl;
-		return ret;
-							        
-	}
-
-	ret = string_format("%s-%02X%02X%02X%02X%02X%02X%02X%02X", idata.GetItsNameHeader().c_str(),
-			h[0].get_octet(), h[1].get_octet(), h[2].get_octet(), h[3].get_octet(),
-			h[4].get_octet(), h[5].get_octet(), h[6].get_octet(), h[7].get_octet());
-
-	DEBUGC_STREAM_RETURNS_OK;
-	return ret;
 }
 
 
@@ -543,8 +577,8 @@ ItsPkiSession::EcEnrollmentRequest_InnerEcRequest(ItsPkiInternalData &idata, Ets
 {
 	DEBUGC_STREAM_CALLED;
 
-	std::string id_str = sessionGetCanonicalId(idata);
-	if (id_str.empty())   {
+	OCTETSTRING cid = sessionGetItsCanonicalId();
+	if (!cid.is_bound() || cid.is_bound() == 0)   {
 		ERROR_STREAMC << "failed: ITS Canonical ID is not set" << std::endl;
 		return false;
 	}
@@ -558,9 +592,16 @@ ItsPkiSession::EcEnrollmentRequest_InnerEcRequest(ItsPkiInternalData &idata, Ets
 	// requestedSubjectAttributes := { id := omit, validityPeriod := omit, region := omit, assuranceLevel := omit,
 	// 	appPermissions := { { psid := 0, ssp := { bitmapSsp := ''O } } },
 	// 	certIssuePermissions := omit }
+
+	IEEE1609dot2BaseTypes::Duration duration = idata.GetItsEcCertDuration();
+	INTEGER valid_from = idata.GetItsEcCertValidFrom();
+	if (valid_from == 0)
+		valid_from = timeNow_InSec();
+	IEEE1609dot2BaseTypes::ValidityPeriod validity_period = IEEE1609dot2BaseTypes::ValidityPeriod(valid_from, duration);
+
 	EtsiTs102941BaseTypes::CertificateSubjectAttributes cert_attrs;
 	cert_attrs.id() = OMIT_VALUE;
-	cert_attrs.validityPeriod() = OMIT_VALUE;
+	cert_attrs.validityPeriod() = validity_period;
 	cert_attrs.region() = OMIT_VALUE;
 	cert_attrs.assuranceLevel() = OMIT_VALUE;
 	cert_attrs.appPermissions() = idata.EcGetAppPermsSsp();
@@ -586,12 +627,32 @@ ItsPkiSession::EcEnrollmentRequest_InnerEcRequest(ItsPkiInternalData &idata, Ets
 		pubkeys.encryptionKey() = encryption_pubkey;
 	}
 
-	CHARSTRING id = CHARSTRING(id_str.c_str());
 	//  InnerEcRequest := { itsId := "", certificateFormat := 1, publicKeys := { verificationKey := { ... }, encryptionKey := { ... } }, requestedSubjectAttributes := { ... } }
-	inner_ec_request = EtsiTs102941TypesEnrolment::InnerEcRequest( id, ItsPkiInternalData::CertificateFormat::ts103097v131, pubkeys, cert_attrs);
+	inner_ec_request = EtsiTs102941TypesEnrolment::InnerEcRequest( cid, ItsPkiInternalData::CertificateFormat::ts103097v131, pubkeys, cert_attrs);
     
 	DEBUGC_STREAM_RETURNS_OK;  	
 	return true; 
+}
+
+
+INTEGER
+ItsPkiSession::timeNow_InSec()
+{
+	struct tm tm_tm = {0, 0, 0, 1, 0, 2004 - 1900, 0, 0, 0}, lt = {0};
+	time_t t = time(NULL);
+	localtime_r(&t, &lt);
+
+	int now = (t - lt.tm_gmtoff - mktime(&tm_tm));
+	return INTEGER(now);
+}
+
+
+INTEGER
+ItsPkiSession::timeNow_InMkSec()
+{
+	INTEGER now = timeNow_InSec();
+	now.set_long_long_val((long long int)(now) * 1000000l);
+	return now;
 }
 
 
@@ -601,19 +662,11 @@ ItsPkiSession::EcEnrollmentRequest_HeaderInfo(ItsPkiInternalData &idata, IEEE160
 	DEBUGC_STREAM_CALLED;
 	
 	// printf("%s +%i: ########## TODO TAI clock ##########\n", __FILE__, __LINE__);
-	struct tm tm_tm = {0, 0, 0, 1, 0, 2004 - 1900, 0, 0, 0}, lt = {0};
-	time_t t = time(NULL);
-    	localtime_r(&t, &lt);
-
-	long long int tm_now = (t - lt.tm_gmtoff - mktime(&tm_tm)) * 1000000l;
-	
-	INTEGER ii;
-	ii.set_long_long_val(tm_now);
-	header_info = IEEE1609dot2::HeaderInfo( OMIT_VALUE, OMIT_VALUE, OMIT_VALUE, OMIT_VALUE, OMIT_VALUE,
-			OMIT_VALUE, OMIT_VALUE, OMIT_VALUE, OMIT_VALUE );
-
-	header_info.generationTime() = ii;
-	header_info.psid() = INTEGER(ITS_APP_NAME_SECURED_CERT_REQUEST);
+	INTEGER time_now = timeNow_InMkSec();
+	header_info = IEEE1609dot2::HeaderInfo(
+			INTEGER(ITS_APP_NAME_SECURED_CERT_REQUEST),
+			time_now,
+			OMIT_VALUE, OMIT_VALUE, OMIT_VALUE, OMIT_VALUE, OMIT_VALUE, OMIT_VALUE, OMIT_VALUE );
 
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
@@ -656,7 +709,7 @@ ItsPkiSession::EcEnrollmentRequest_InnerData(ItsPkiInternalData &idata,
 		return false;
 	}
 
-	dump_ttcn_object(tbs_encoded, "To be signed encoded: ");
+	dump_ttcn_object(tbs_encoded, "To be signed by ITS Ec Verification Key (encoded): ");
 	IEEE1609dot2BaseTypes::HashAlgorithm hash_algo = idata.GetHashAlgorithm();
 	IEEE1609dot2::SignerIdentifier signer_id;
 	signer_id.self__() = ASN_NULL(ASN_NULL_VALUE);
@@ -699,7 +752,12 @@ ItsPkiSession::EncryptSignedData_ForEa(ItsPkiInternalData &idata, OCTETSTRING &t
 		return false;
 	}
 
+	OCTETSTRING rr;
 	if (!etsiServices.setRecipient(cert_blob, NULL))   {
+                ERROR_STREAMC << "cannot setup EncryptFor context" << std::endl;
+		return false;
+	}
+	if (!etsiServices.GetRecipientHashedID8(rr))   {
                 ERROR_STREAMC << "cannot setup EncryptFor context" << std::endl;
 		return false;
 	}
@@ -785,6 +843,18 @@ ItsPkiSession::EncryptSignedData_ForAa(ItsPkiInternalData &idata, OCTETSTRING &t
 
 
 bool
+ItsPkiSession::EcEnrollmentResponse_Parse(OCTETSTRING &recipient_cert, OCTETSTRING &response_raw, OCTETSTRING &ret_cert)
+{
+	if (!etsiServices.setRecipient(recipient_cert, NULL))   {
+		ERROR_STREAMC << "cannot setup Ec Enrollment Parse Response context" << std::endl;
+		return false;
+	}
+
+	return EcEnrollmentResponse_Parse(response_raw, ret_cert);
+}
+
+
+bool
 ItsPkiSession::EcEnrollmentResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING &ret_cert)
 {
 	if (!EcEnrollmentResponse_Parse(response_raw))
@@ -802,6 +872,7 @@ ItsPkiSession::EcEnrollmentResponse_Parse(OCTETSTRING &response_raw)
 {
 	DEBUGC_STREAM_CALLED;
 
+	dump_ttcn_object(response_raw, "EcEnrollment Response: ");
 	OCTETSTRING payload;
 	if (!etsiServices.DecryptPayload(response_raw, payload))   {
                 ERROR_STREAMC << "decrypt payload failed" << std::endl;
@@ -1099,7 +1170,8 @@ ItsPkiSession::sessionCheckEcEnrollmentArguments(ItsPkiInternalData &idata)
 		}
 	}
 
-	if (sessionGetCanonicalId(idata).empty())   {
+	// if (!sessionGetCanonicalId(idata).is_bound() || sessionGetCanonicalId(idata).lengthof() == 0)   {
+	if (!sessionGetItsCanonicalId().is_bound() || sessionGetItsCanonicalId().lengthof() == 0)   {
 		ERROR_STREAMC << "ItsPkiSession::sessionCheckEcEnrollmentArguments() cannot get session ITS Canonical ID" << std::endl;
 		return false;
 	}
@@ -1122,6 +1194,7 @@ ItsPkiSession::EcEnrollmentRequest_Create(ItsPkiInternalData &idata, OCTETSTRING
 	// InnerEcRequest
 	EtsiTs102941TypesEnrolment::InnerEcRequest inner_ec_request;
 	EcEnrollmentRequest_InnerEcRequest(idata, inner_ec_request);
+	dump_ttcn_object(inner_ec_request, "InnerEcRequest : ");
 
 	// EtsiTS102941Data
 	IEEE1609dot2::Ieee1609Dot2Data inner_data;
@@ -1165,8 +1238,8 @@ ItsPkiSession::EcEnrollmentRequest_Create(ItsPkiInternalData &idata, OCTETSTRING
 		return false;
 	}
 
-	dump_ttcn_object(tbs, "ToBeSignedData: ");
-	dump_ttcn_object(tbs_encoded, "ToBeSignedData (encoded): ");
+	dump_ttcn_object(tbs, "ToBeSignedData by Technical Key: ");
+	dump_ttcn_object(tbs_encoded, "ToBeSignedData Technical Key (encoded): ");
 
 	IEEE1609dot2BaseTypes::HashAlgorithm hash_algo = idata.GetHashAlgorithm();
 	IEEE1609dot2::SignerIdentifier signer_id;
@@ -1227,6 +1300,10 @@ ItsPkiSession::sessionCheckAtEnrollmentArguments(ItsPkiInternalData &idata)
 		}
 	}
 
+	std::cout << "### sessionCheckAtEnrollmentArguments() sessionItsAtEncryptionKey " << sessionItsAtEncryptionKey << std::endl;
+	std::cout << "### sessionCheckAtEnrollmentArguments() ItsAtEncryptionKey " << idata.GetItsAtEncryptionKey() << std::endl;
+	std::cout << "### sessionCheckAtEnrollmentArguments() IsItsAtEncryptionKey " << idata.IsItsAtEncryptionKeyEnabled() << std::endl;
+
 	if ((sessionItsAtEncryptionKey == NULL) && (idata.GetItsAtEncryptionKey() == NULL) && idata.IsItsAtEncryptionKeyEnabled())   {
 		sessionItsAtEncryptionKey = ECKey_GeneratePrivateKey();
        		if (sessionItsAtEncryptionKey == NULL)   {	
@@ -1235,7 +1312,7 @@ ItsPkiSession::sessionCheckAtEnrollmentArguments(ItsPkiInternalData &idata)
 		}
 	}
 
-	if (sessionGetCanonicalId(idata).empty())   {
+	if (!sessionGetItsCanonicalId().is_bound() || sessionGetItsCanonicalId().lengthof() == 0)   {
 		ERROR_STREAMC << "ItsPkiSession::sessionCheckEcEnrollmentArguments() cannot get session ITS Canonical ID" << std::endl;
 		return false;
 	}
@@ -1298,7 +1375,7 @@ ItsPkiSession::AtEnrollmentRequest_SignedExternalPayload(ItsPkiInternalData &ida
 		ERROR_STREAMC << "failed to encode ToBeSignedData" << std::endl;
 		return false;
 	}
-	dump_ttcn_object(tbs_encoded, "ToBeSigned encoded: ");
+	dump_ttcn_object(tbs_encoded, "ToBeSigned by ITS Ec Verification Key (encoded): ");
 
 	IEEE1609dot2::SignerIdentifier signer_id;
 	signer_id.digest() = sessionGetItsEcId();
@@ -1358,6 +1435,7 @@ ItsPkiSession::AtEnrollmentRequest_POP(ItsPkiInternalData &idata,
 		ERROR_STREAMC << "failed to encode ToBeSignedData" << std::endl;
 		return false;
 	}
+	dump_ttcn_object(tbs_encoded, "To be signed by ITS At Verification Key (encoded): ");
 
 	IEEE1609dot2BaseTypes::HashAlgorithm hash_algo = idata.GetHashAlgorithm();
 
@@ -1387,7 +1465,7 @@ ItsPkiSession::AtEnrollmentRequest_POP(ItsPkiInternalData &idata,
 
 
 bool
-ItsPkiSession::AtEnrollmentRequest_InnerAtRequest(ItsPkiInternalData &idata, OCTETSTRING &ret)
+ItsPkiSession::AtEnrollmentRequest_Create(ItsPkiInternalData &idata, OCTETSTRING &ret)
 {
 	DEBUGC_STREAM_CALLED;
 
@@ -1434,9 +1512,33 @@ ItsPkiSession::AtEnrollmentRequest_InnerAtRequest(ItsPkiInternalData &idata, OCT
 	}
 	dump_ttcn_object(keyTag, "KeyTag: ");
 	
+	IEEE1609dot2BaseTypes::Duration duration = idata.GetItsAtCertDuration();
+	INTEGER valid_from = idata.GetItsAtCertValidFrom();
+	if (valid_from == 0)
+		valid_from = timeNow_InSec();
+	IEEE1609dot2BaseTypes::ValidityPeriod validity_period = IEEE1609dot2BaseTypes::ValidityPeriod(valid_from, duration);
+
         IEEE1609dot2BaseTypes::SequenceOfPsidSsp ssp_seq = idata.AtGetAppPermsSsp();
+
         EtsiTs102941BaseTypes::CertificateSubjectAttributes cert_attrs = EtsiTs102941BaseTypes::CertificateSubjectAttributes(
-			OMIT_VALUE, OMIT_VALUE, OMIT_VALUE, OMIT_VALUE, ssp_seq, OMIT_VALUE);
+			OMIT_VALUE, validity_period, OMIT_VALUE, OMIT_VALUE, ssp_seq, OMIT_VALUE);
+
+#if 0
+	IEEE1609dot2BaseTypes::Duration duration = idata.GetItsEcCertDuration();
+	INTEGER valid_from = idata.GetItsEcCertValidFrom();
+	if (valid_from == 0)
+		valid_from = timeNow_InSec();
+	IEEE1609dot2BaseTypes::ValidityPeriod validity_period = IEEE1609dot2BaseTypes::ValidityPeriod(valid_from, duration);
+
+	EtsiTs102941BaseTypes::CertificateSubjectAttributes cert_attrs;
+	cert_attrs.id() = OMIT_VALUE;
+	cert_attrs.validityPeriod() = validity_period;
+	cert_attrs.region() = OMIT_VALUE;
+	cert_attrs.assuranceLevel() = OMIT_VALUE;
+	cert_attrs.appPermissions() = idata.EcGetAppPermsSsp();
+	cert_attrs.certIssuePermissions() = OMIT_VALUE;
+
+#endif
 
 	EtsiTs102941TypesAuthorization::SharedAtRequest sharedAtRequest;
 	sharedAtRequest.eaId() = idata.GetEAId(); 
@@ -1702,6 +1804,7 @@ ItsPkiSession::AtEnrollmentResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING
 {
 	DEBUGC_STREAM_CALLED;
 
+	dump_ttcn_object(response_raw, "AtEnrollment Response: ");
 	OCTETSTRING payload;
 	if (!etsiServices.DecryptPayload(response_raw, payload))   {
                 ERROR_STREAMC << "decrypt payload failed" << std::endl;

@@ -277,3 +277,28 @@ decEtsiTs103097DataEncrypted(const OCTETSTRING &stream)
 
 }
 
+
+std::string
+printableItsCanonicalId(const OCTETSTRING &cid)
+{
+        std::string ret;
+        int ii = 0;
+
+        for (ii=0; ii<cid.lengthof(); ii++)   {
+                char c = (char) (cid[ii].get_octet());
+                if ( std::isalnum(c) || c == '-')   {
+                        ret += c;
+                }
+                else   {
+                        break;
+                }
+        }
+
+        if (ii<cid.lengthof())   {
+                OCTETSTRING sid = OCTETSTRING(cid.lengthof() - ii, (const unsigned char *)cid + ii);
+                ret += '.';
+                ret += std::string(oct2str(sid));
+        }
+
+        return ret;
+}

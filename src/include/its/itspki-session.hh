@@ -40,7 +40,13 @@ private:
 	OCTETSTRING sessionItsEcId;
 	OCTETSTRING sessionItsAtCert;
 
-	std::string its_id;
+	std::string its_registered_id;
+	OCTETSTRING its_cid;
+	std::string its_pid;
+	OCTETSTRING its_sid;
+
+	INTEGER timeNow_InSec();
+	INTEGER timeNow_InMkSec();
 
 	bool GetPublicVerificationKey(void *, IEEE1609dot2BaseTypes::PublicVerificationKey &);
 	bool GetPublicEncryptionKey(void *, IEEE1609dot2BaseTypes::PublicEncryptionKey &);
@@ -60,6 +66,10 @@ public:
 	const char *GetClassName() {return CLASS_NAME.c_str();};
 	const char *GetIdataClassName() {return idata ? idata->GetClassName() : NULL; };
 	
+	std::string sessionGetItsPrefixId() { return its_pid; } ;
+	OCTETSTRING & sessionGetItsSerialId() { return its_sid; } ;
+	OCTETSTRING & sessionGetItsCanonicalId();
+
 	void *sessionGetTechnicalKey();
 	void *sessionGetItsEcVerificationKey();
 	void *sessionGetItsEcEncryptionKey();
@@ -69,8 +79,7 @@ public:
 	OCTETSTRING &sessionGetItsEcId();
 	OCTETSTRING &sessionGetItsAtCert() { return sessionItsAtCert; };
 
-	std::string sessionGetCanonicalId(ItsPkiInternalData &);
-	std::string sessionGetItsID() { return its_id; };
+	std::string sessionGetRegisteredItsID() { return its_registered_id; };
 	bool sessionCheckEcEnrollmentArguments(ItsPkiInternalData &);
 	bool sessionCheckAtEnrollmentArguments(ItsPkiInternalData &);
 
@@ -91,10 +100,11 @@ public:
 	bool EcEnrollmentRequest_HeaderInfo(ItsPkiInternalData &, IEEE1609dot2::HeaderInfo &);
 	bool EcEnrollmentResponse_Parse(OCTETSTRING &);
 	bool EcEnrollmentResponse_Parse(OCTETSTRING &, OCTETSTRING &);
+	bool EcEnrollmentResponse_Parse(OCTETSTRING &, OCTETSTRING &, OCTETSTRING &);
 	bool EcEnrollmentResponse_Status(OCTETSTRING &);
 	bool EcEnrollmentRequest_Parse(OCTETSTRING &, void *, EtsiTs102941TypesEnrolment::InnerEcRequest &);
 
-	bool AtEnrollmentRequest_InnerAtRequest(ItsPkiInternalData &, OCTETSTRING &);
+	bool AtEnrollmentRequest_Create(ItsPkiInternalData &, OCTETSTRING &);
 	bool AtEnrollmentRequest_HeaderInfo(ItsPkiInternalData &, IEEE1609dot2::HeaderInfo &);
 	bool AtEnrollmentRequest_SignedExternalPayload(ItsPkiInternalData &, OCTETSTRING &, EtsiTs103097Module::EtsiTs103097Data__SignedExternalPayload &);
 	bool AtEnrollmentRequest_SignedExternalPayload(ItsPkiInternalData &, EtsiTs102941TypesAuthorization::SharedAtRequest &, EtsiTs103097Module::EtsiTs103097Data__SignedExternalPayload &);
@@ -108,6 +118,8 @@ public:
 	
 	bool IEEE1609dot2_VerifySignedData_C(IEEE1609dot2::SignedData &signed_data, void *, IEEE1609dot2::Ieee1609Dot2Content &);
 	bool IEEE1609dot2_VerifySignedData_H(IEEE1609dot2::SignedData &signed_data, void *, IEEE1609dot2::HashedData &);
+
+	bool setSKeyContext(OCTETSTRING &skey_id, OCTETSTRING &aes_key, OCTETSTRING &tag);
 };
 
 

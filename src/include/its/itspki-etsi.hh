@@ -71,6 +71,7 @@ private:
 		bool checkDecryptContext(OCTETSTRING &);
 
 		void setAesSKey(const char *hex_value) {aes_skey = str2oct(hex_value);};
+		void setup_skey(const OCTETSTRING &k, const OCTETSTRING &t) {aes_skey = k; tag = t; } ;
 		
 		bool setup(int, const char *);
 		bool setup(void *key, OCTETSTRING &);
@@ -97,9 +98,8 @@ private:
 		void *e_prvkey = NULL;
 		void *sender_e_pubkey = NULL;
 
-		IEEE1609dot2BaseTypes::HashAlgorithm hash_algo = IEEE1609dot2BaseTypes::HashAlgorithm::UNKNOWN_VALUE;
+		bool SetHashAlgo();
 	public:
-		// bool setupForDecrypt(void *prvkey, void *pubkey);
 		void SetPrivateKey(void *key) { e_prvkey = key; };
 		void SetSenderPublicKey(void *key) { sender_e_pubkey = key; };
 		void *GetPrivateKey() { return e_prvkey; };
@@ -121,15 +121,15 @@ public:
 
 	~ItsPkiEtsi();
 
-	// bool setRecipient(IEEE1609dot2::CertificateBase &, void *);
 	bool setRecipient(OCTETSTRING &, void *);
 	bool setDecryptContext(void *, void *);
-	bool setup_decrypt(OCTETSTRING &);
-	// bool EncryptPayload(IEEE1609dot2::CertificateBase &, OCTETSTRING &, EtsiTs103097Module::EtsiTs103097Data__Encrypted__My &);
+	bool setDecryptContextWithSKey(OCTETSTRING &);
+	bool setDecryptContextWithSKey(OCTETSTRING &, OCTETSTRING &, OCTETSTRING &);
 	bool EncryptPayload(OCTETSTRING &, EtsiTs103097Module::EtsiTs103097Data__Encrypted__My &);
 	bool DecryptPayload(OCTETSTRING &, OCTETSTRING &);
 	bool DecryptPayload(EtsiTs103097Module::EtsiTs103097Data__Encrypted__My &, OCTETSTRING &);
 	int GetRecipientEncryptionNID() { return recipient.GetEncryptionNID(); };
+	bool GetRecipientHashedID8(OCTETSTRING &ret) { return recipient.GetHashedID8(ret); };
 };
 
 #endif // ifndef ITS_PKI_ETSI_SERVICES_HH

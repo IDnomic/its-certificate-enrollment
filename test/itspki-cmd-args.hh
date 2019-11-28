@@ -104,8 +104,9 @@ public:
 	std::string url_its;
 	std::string url_es;
 	std::string profile;
-	std::string its_name_header;
 	std::string its_canonical_id;
+	std::string its_prefix_id;
+	std::string its_serial_id_hex;
 	int test_period_ms;
 	float test_frequency;
 
@@ -144,7 +145,11 @@ public:
 	std::string its_at_ekey_b64;
 	bool its_at_ekey_enable = false;
 	bool its_at_save = false;
-	
+
+	std::string curlopt_http_proxy;
+	std::string curlopt_https_proxy;
+	std::string curlopt_noproxy;
+
 	int wantedstart;
 	int taiutc;
 	long cycles_num = 1;
@@ -231,7 +236,14 @@ public:
 #define PKIITS_CMDARG_ITS_NEED_TO_REGISTER	"PKIITS_CMDARG_ITS_NEED_TO_REGISTER"
 #define PKIITS_CMDARG_ITS_NEED_EC_ENROLLMENT	"PKIITS_CMDARG_ITS_NEED_EC_ENROLLMENT"
 #define PKIITS_CMDARG_ITS_CANONICAL_ID		"PKIITS_CMDARG_ITS_CANONICAL_ID" 
-#define PKIITS_CMDARG_ITS_NAME_HEADER		"PKIITS_CMDARG_ITS_NAME_HEADER" 
+#define PKIITS_CMDARG_ITS_CANONICAL_ID_B64	"PKIITS_CMDARG_ITS_CANONICAL_ID_B64" 
+#define PKIITS_CMDARG_ITS_SERIAL_ID		"PKIITS_CMDARG_ITS_SERIAL_ID" 
+#define PKIITS_CMDARG_ITS_PREFIX_ID		"PKIITS_CMDARG_ITS_PREFIX_ID" 
+#define PKIITS_CMDARG_TEST_FREQUENCY		"PKIITS_CMDARG_TEST_FREQUENCY"
+
+#define HTTP_PROXY	"HTTP_PROXY"
+#define HTTPS_PROXY	"HTTPS_PROXY"
+#define NOPROXY		"NOPROXY"
 
 #define PKIITS_CMDARG_THREADS	"PKIITS_CMDARG_THREADS"
 #define PKIITS_CMDARG_CYCLES_PER_THREAD	"PKIITS_CMDARG_CYCLES_PER_THREAD"

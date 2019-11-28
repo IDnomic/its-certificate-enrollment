@@ -82,4 +82,6 @@ inline bool encSymmetricCiphertext(IEEE1609dot2::SymmetricCiphertext &obj, OCTET
 	return ret.is_bound();
 }
 
+
+std::string printableItsCanonicalId(const OCTETSTRING &cid);
 #endif // UTILS_TTCN_HH

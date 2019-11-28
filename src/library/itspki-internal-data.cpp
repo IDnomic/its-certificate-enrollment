@@ -13,65 +13,70 @@ ItsPkiInternalData::ItsPkiInternalData()
 {
 	DEBUGC_STREAM_CALLED;
 	init();
-}
-
-
-bool
-ItsPkiInternalData::SetItsNameHeader(const std::string &nm_header)
-{
-	DEBUGC_STREAM_CALLED;
-
-	struct timespec ts;
-	clock_gettime(CLOCK_REALTIME, &ts);
-        struct tm *htm = localtime( &ts.tv_sec );
-
-	its_name_header = nm_header.empty() ? std::string(DEFAULT_ITS_CANONICAL_ID_HEADER) : nm_header;
-	its_name_header += string_format("-%i%02i%02i",  htm->tm_year + 1900, htm->tm_mon + 1, htm->tm_mday);
-	
 	DEBUGC_STREAM_RETURNS_OK;
-	return true;
 }
 
 
 bool
-ItsPkiInternalData::SetCanonicalID(const std::string &id, const std::string &nm_header, void *t_key)
+ItsPkiInternalData::SetItsCanonicalID(const std::string &cid, const std::string &pid, const std::string &sid_hex, void *t_key)
 {
 	DEBUGC_STREAM_CALLED;
+	DEBUGC_STREAM << "cid:" << cid << std::endl;
+	DEBUGC_STREAM << "pid:" << pid << std::endl;
+	DEBUGC_STREAM << "sid-hex:" << sid_hex << std::endl;
 
-	if (!id.empty())    {
-		its_canonical_id = id;
-		
-		DEBUGC_STREAM_RETURNS_OK;
+	if (!cid.empty())    {
+		size_t pos = cid.rfind('.');
+		if ((pos == std::string::npos) || (pos == (cid.length() - 1)))   {
+			its_pid = cid;
+			its_sid.clean_up();
+			its_cid = OCTETSTRING(cid.length(), (const unsigned char *)cid.c_str());
+		}
+		else  {
+			its_pid = cid.substr(0, pos);
+			its_sid = str2oct(cid.substr(pos+1).c_str());
+			its_cid = OCTETSTRING(its_pid.length(), (const unsigned char *)its_pid.c_str()) + its_sid;
+		}
+
 		return true;
 	}
 
-	if (itsEcCert_blob.is_present())   {
-		IEEE1609dot2::CertificateBase cert = decEtsiTs103097Certificate(itsEcCert_blob);
-		IEEE1609dot2::CertificateId cert_id = cert.toBeSigned().id();
-		if (cert_id.ischosen(IEEE1609dot2::CertificateId::ALT_name))   {
-			its_canonical_id = unichar2char(cert_id.name());
-			
-			DEBUGC_STREAM_RETURNS_OK;
+	its_pid.clear();
+	its_sid.clean_up();
+	its_cid.clean_up();
+
+	if (!pid.empty())   {
+		its_cid = OCTETSTRING(pid.length(), (const unsigned char *)pid.c_str());
+		its_pid = pid;
+		DEBUGC_STREAM << "PID: " << its_pid << std::endl;
+	}
+
+	generate_its_sid = false;
+	if (!sid_hex.compare("generate"))   {
+		if (t_key != NULL)   {
+			OCTETSTRING h;
+			if (!ECKey_PublicKeyHashedID(t_key, h))   {
+				ERROR_STREAMC << "cannot get HashedID from EC public key" << std::endl;
+				return false;
+			}
+
+			its_sid = OCTETSTRING(8, (const unsigned char *)h);
+			DEBUGC_STREAM << "SID:" <<  its_sid << std::endl;
+		}
+		else   {
+			DEBUGC_STREAM << "No technical key" << std::endl;
+			generate_its_sid = true;
 			return true;
 		}
 	}
-
-	if (!nm_header.empty())
-		SetItsNameHeader(nm_header);
-
-	if (t_key == NULL)
-		return true;
-
-	OCTETSTRING h;
-    	if (!ECKey_PublicKeyHashedID(t_key, h))   {
-		ERROR_STREAMC << "cannot get HashedID from EC public key" << std::endl;
-		return false;
+	else if (!sid_hex.empty())   {
+		its_sid = str2oct(sid_hex.c_str());
 	}
 
-	its_canonical_id = string_format("%s-%02X%02X%02X%02X%02X%02X%02X%02X", its_name_header.c_str(),
-			h[0].get_octet(), h[1].get_octet(), h[2].get_octet(), h[3].get_octet(),
-			h[4].get_octet(), h[5].get_octet(), h[6].get_octet(), h[7].get_octet());
+	if (its_sid.lengthof() > 0)
+		its_cid += its_sid;
 
+	DEBUGC_STREAM << "returns CID (b64): " << encode_base64(its_cid) << std::endl;
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
 }
@@ -84,6 +89,22 @@ ItsPkiInternalData::~ItsPkiInternalData()
 	ECKey_Free(itsEcEncryptionKey);
 	ECKey_Free(itsAtVerificationKey);
 	ECKey_Free(itsAtEncryptionKey);
+}
+
+
+bool
+ItsPkiInternalData::SetDuration(int num, IEEE1609dot2BaseTypes::Duration::union_selection_type units, IEEE1609dot2BaseTypes::Duration &duration)
+{
+	if (units == IEEE1609dot2BaseTypes::Duration::ALT_years)
+		ItsEcCertDuration.years() = num;
+	else if (units == IEEE1609dot2BaseTypes::Duration::ALT_sixtyHours)
+		ItsEcCertDuration.sixtyHours() = num;
+	else if (units == IEEE1609dot2BaseTypes::Duration::ALT_hours)
+		ItsEcCertDuration.hours() = num;
+	else
+		ItsEcCertDuration.seconds() = num;
+
+	return true;
 }
 
 
@@ -382,6 +403,14 @@ ItsPkiInternalData::init()
 	IEEE1609dot2BaseTypes::module_object.pre_init_module();
 	EtsiTs103097Module::module_object.pre_init_module();
 	hash_algorithm = IEEE1609dot2BaseTypes::HashAlgorithm::UNBOUND_VALUE;
+
+        ItsEcCertDuration.years() = DEFAULT_ITS_EC_CERT_DURATION_YEARS;
+	ItsEcCertValidFrom = 0;
+
+        ItsAtCertDuration.minutes() = DEFAULT_ITS_AT_CERT_DURATION_MINS;
+	ItsAtCertValidFrom = 0;
+
+	DEBUGC_STREAM_RETURNS_OK;
 }
 
 
@@ -429,12 +458,7 @@ ItsPkiInternalData::CheckEnrollmentDataAA()
 		ERROR_STREAMC << "invalid AA certificate blob" << std::endl;
 		return false;
 	}
-#if 0
-	if (aaEncryptionKey == NULL)   {
-		ERROR_STREAMC << "AA encryption key do not set" << std::endl;
-		return false;
-	}
-#endif
+
 	if (!aaId.is_bound() || aaId.lengthof() == 0)   {
 		ERROR_STREAMC << "AA ID do not set" << std::endl;
 		return false;
