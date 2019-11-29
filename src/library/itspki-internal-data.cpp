@@ -154,7 +154,6 @@ ItsPkiInternalData::AddAidSsp(IEEE1609dot2BaseTypes::SequenceOfPsidSsp &ssp_seq,
 }
 
 
-// AtAddAidSsp(const long _id, const std::string &_opaque, const std::string &_bitmap) { return AddAidSsp(at_ssp_seq, _id, _opaque, _bitmap); };
 bool
 ItsPkiInternalData::AddAidSsp(IEEE1609dot2BaseTypes::SequenceOfPsidSsp &psidssp_seq, std::string &psidssp_str)
 {
@@ -254,6 +253,7 @@ ItsPkiInternalData::getEncryptionKeyFromCertificate(OCTETSTRING &cert_raw, void 
 	DEBUGC_STREAM_RETURNS_OK;
 	return true;
 }
+
 
 bool
 ItsPkiInternalData::getVerificationKeyFromCertificate(OCTETSTRING &cert_raw, void **ret_key)
@@ -411,21 +411,6 @@ ItsPkiInternalData::init()
 	ItsAtCertValidFrom = 0;
 
 	DEBUGC_STREAM_RETURNS_OK;
-}
-
-
-bool
-ItsPkiInternalData::CheckItsRegisterData()
-{
-	DEBUGC_STREAM_CALLED;
-
-        if (profile.empty())   {
-		ERROR_STREAM << "Its register: missing or invalid 'profile'" << std::endl;
-		return false;
-	}
-	
-	DEBUGC_STREAM_RETURNS_OK;
-	return true;
 }
 
 

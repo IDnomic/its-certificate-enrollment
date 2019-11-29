@@ -40,7 +40,6 @@ private:
 	OCTETSTRING sessionItsEcId;
 	OCTETSTRING sessionItsAtCert;
 
-	std::string its_registered_id;
 	OCTETSTRING its_cid;
 	std::string its_pid;
 	OCTETSTRING its_sid;
@@ -66,9 +65,19 @@ public:
 	const char *GetClassName() {return CLASS_NAME.c_str();};
 	const char *GetIdataClassName() {return idata ? idata->GetClassName() : NULL; };
 	
+	std::string sessionGetProfile() { return idata->GetProfile(); } ;
 	std::string sessionGetItsPrefixId() { return its_pid; } ;
 	OCTETSTRING & sessionGetItsSerialId() { return its_sid; } ;
 	OCTETSTRING & sessionGetItsCanonicalId();
+
+	void sessionSetItsCanonicalId(OCTETSTRING &id) { its_cid = id; };
+	void sessionSetItsSerialId(OCTETSTRING &id) { its_sid = id; };
+	void sessionSetItsPrefixId(std::string &id) { its_pid = id; };
+
+	void *sessionGenerateTechnicalKey() {
+		sessionTechnicalKey = ECKey_GeneratePrivateKey();
+		return sessionTechnicalKey;
+	};
 
 	void *sessionGetTechnicalKey();
 	void *sessionGetItsEcVerificationKey();
@@ -79,7 +88,6 @@ public:
 	OCTETSTRING &sessionGetItsEcId();
 	OCTETSTRING &sessionGetItsAtCert() { return sessionItsAtCert; };
 
-	std::string sessionGetRegisteredItsID() { return its_registered_id; };
 	bool sessionCheckEcEnrollmentArguments(ItsPkiInternalData &);
 	bool sessionCheckAtEnrollmentArguments(ItsPkiInternalData &);
 
@@ -90,9 +98,6 @@ public:
 	bool EncryptSignedData_ForEa(ItsPkiInternalData &, OCTETSTRING &, IEEE1609dot2::Ieee1609Dot2Data &);
 	bool EncryptSignedData_ForAa(ItsPkiInternalData &, OCTETSTRING &, OCTETSTRING &);
 	bool EncryptSignedData_ForAa(ItsPkiInternalData &, OCTETSTRING &, IEEE1609dot2::Ieee1609Dot2Data &);
-
-	bool ItsRegisterRequest_Create(ItsPkiInternalData &, OCTETSTRING &);
-	bool ItsRegisterResponse_Parse(OCTETSTRING &, OCTETSTRING &);
 
 	bool EcEnrollmentRequest_Create(ItsPkiInternalData &, OCTETSTRING &);
 	bool EcEnrollmentRequest_InnerEcRequest(ItsPkiInternalData &, EtsiTs102941TypesEnrolment::InnerEcRequest &);
@@ -121,6 +126,4 @@ public:
 
 	bool setSKeyContext(OCTETSTRING &skey_id, OCTETSTRING &aes_key, OCTETSTRING &tag);
 };
-
-
 #endif // ifndef ITS_PKI_SESSION_HH

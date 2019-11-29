@@ -164,9 +164,7 @@ public:
 	void SetItsAtVerificationKey(void *key) { itsAtVerificationKey = key; };
 	void *GetItsAtVerificationKey() { return itsAtVerificationKey; };
 	
-	void SetItsAtEncryptionKey(void *key) { itsAtEncryptionKey = key;
-		//itsAtEncryptionKeyEnable = (key != NULL);
-	};
+	void SetItsAtEncryptionKey(void *key) { itsAtEncryptionKey = key; };
 	void *GetItsAtEncryptionKey() { return (itsAtEncryptionKeyEnable ? itsAtEncryptionKey : NULL); };
 	void SetItsAtEncryptionKeyEnable(bool enable) { itsAtEncryptionKeyEnable = enable; }
 	bool IsItsAtEncryptionKeyEnabled() { return itsAtEncryptionKeyEnable; }
@@ -180,7 +178,6 @@ public:
 	bool IsEcEnrollmentNeeded() { return itsNeedEcEnrollment; };
 	void SetEcEnrollmentFlag(bool needed) { itsNeedEcEnrollment = needed; };
 	
-	bool CheckItsRegisterData();
 	bool CheckEcEnrollmentArguments();
 	bool CheckAtEnrollmentArguments();
 

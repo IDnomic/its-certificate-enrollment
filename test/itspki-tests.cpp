@@ -19,7 +19,6 @@ std::string its_tkey_pubkey_id = "9891EED436ADBC62";
 const char *its_tkey =    "MHcCAQEEIJhYN95tGd6fvySjcQXxG1mzQ2QEPKdIQFJa/FjtlTE+oAoGCCqGSM49AwEHoUQDQgAE0XKg7gn78lEHh3p0YD54oaYWy8AVC7vaP9yy5gcos89bDqwVSqyiqlidEYfyDaIGg2iSNKRHVQ4gOUkVmsax8w==";
 const char *its_tpubkey = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE0XKg7gn78lEHh3p0YD54oaYWy8AVC7vaP9yy5gcos89bDqwVSqyiqlidEYfyDaIGg2iSNKRHVQ4gOUkVmsax8w==";
 
-const char *its_register_resp_id_hex = "3935383337";
 const char *ec_psidssp_seq = "623:01C0";
 const char *its_ec_ekey = "MHcCAQEEIGxG88tF++Y8l4tb58u50D7U4rZw0cm02u3Odq/Yb1BpoAoGCCqGSM49AwEHoUQDQgAEofoXTU2fkIiVSOD3svFGUB8qa19ednPvuZbjml3zIkNiMRgyDeJE9QWwwRRCzzhKhxZssaaGzNuL8/I1J+6OqA==";
 const char *its_ec_vkey = "MHcCAQEEIH0sgR6prK5aGdW5Ne/5jUl3dHRI5O8pGTJqc+xKpQWXoAoGCCqGSM49AwEHoUQDQgAEl17NaS6FEMKXU2/VUnEl/GzLUcmZKjzqI/gOi096HZmwVeZ9k6PJgkIpp2dAgdsqL7/1pKJuMxsdv/Xg2XFOhQ==";
@@ -36,8 +35,6 @@ const char *at_psidssp_seq = "36:010000";
 
 const char *aa_eprvkey = "MHcCAQEEIN5HgM/nP7yW2GQz3/SFW1ztfXVS+4w8hBwDKPurrY4+oAoGCCqGSM49AwEHoUQDQgAE1820Ad2fWnZZzKcV970uiENWOdYYgRqLCwost2vhvu996uBQVgU2e7PzcNMpqJqCFDiAsTgx4Yv9azxbxtkdPg==";
 const char *aa_vprvkey = "MHcCAQEEIAyypth3nkaRXCr+ZMfQ7GnJCSjJcz86h/Z8DEx2FDpioAoGCCqGSM49AwEHoUQDQgAEBQWhUESImLObDaj3qC0srL1SVqH0h0yGOr76iPVsZyBy/azdoDMitV46iaolvM6z6lEer1c/WhDBGkaLKTtzYA==";
-
-const char *blob_its_register_response = "7B226964223A223935383337222C227072656669784964223A2242454E43482D495453504B492D55544F504941222C2273657269616C4964223A2274787A66664B3658456E673D222C2263616E6F6E6963616C4E616D65223A2242454E43482D495453504B492D55544F5049412E42373143444637434145393731323738222C2263616E6F6E6963616C4964223A22516B564F51306774535652545545744A4C5656555431424A51626363333379756C784A34222C22746563686E6963616C5075626C69634B6579223A224D466B77457759484B6F5A497A6A3043415159494B6F5A497A6A304441516344516741453055666C4F63583732724553505947374D75426A633654715A593776474C646F6E4951706867336479456969646B743568714A646C4B4C5A462F495A6C7454476D6A43586E53567065326876483558383670636A7A773D3D222C22737461747573223A22414354495641544544222C2270726F66696C65223A225465737444656D6F50726F66696C65222C2274616773223A5B5D2C2265634E756D626572223A307D";
 
 int ec_inner_request_cert_valid_from = 0x1DE8809A;
 const char *blob_ec_inner_request = "001B42454E43482D495453504B492D55544F5049419891EED436ADBC6201808084975ECD692E8510C297536FD5527125FC6CCB51C9992A3CEA23F80E8B4F7A1D99B055E67D93A3C9824229A7674081DB2A2FBFF5A4A26E331B1DBFF5E0D9714E85008084A1FA174D4D9F90889548E0F7B2F146501F2A6B5F5E7673EFB996E39A5DF32243623118320DE244F505B0C11442CF384A87166CB1A686CCDB8BF3F23527EE8EA8241DE8809A86000301018002026F81030201C0";
@@ -107,69 +104,6 @@ TEST(InternalData_canonicalID, add)
 	ASSERT_EQ(idata.GetItsPrefixId(), std::string(its_prefix_id));
 	ASSERT_EQ(idata.GetItsSerialId(), str2oct(its_tkey_pubkey_id.c_str()));
 	ASSERT_FALSE(idata.IsGenerateItsSerialId());
-}
-
-
-TEST(its_register_request, add)
-{
-// {
-//	"prefixId":"BENCH-ITSPKI-UTOPIA",
-//	"serialId":"mJHu1DatvGI=",
-//	"profile":"TestDemoProfile",
-//	"technicalPublicKey":"MFkw...8w==",
-//	"status":"ACTIVATED"
-// }
-	ItsPkiCmdArguments cmd_args;
-	defaultCmdArgs(cmd_args);
-
-	ItsPkiInternalData idata;
-	
-	ASSERT_TRUE(ParseItsRegisterCmdArguments(cmd_args, idata));
-	ItsPkiSession session(idata);
-	
-	OCTETSTRING request;
-        ASSERT_TRUE(session.ItsRegisterRequest_Create(idata, request));
-	std::string request_json = std::string((const char *)((const unsigned char *)request), request.lengthof());
-
-	std::string serial_id_b64;
-	ASSERT_TRUE(json_get_tag_value(request_json, "serialId", serial_id_b64));
-	ASSERT_STREQ(serial_id_b64.c_str(), encode_base64(str2oct(its_serial_id_hex)));
-
-	std::string json_tpubkey;
-	ASSERT_TRUE(json_get_tag_value(request_json,"technicalPublicKey", json_tpubkey));
-	ASSERT_STREQ(json_tpubkey.c_str(), its_tpubkey);
-
-	std::string json_status;
-	ASSERT_TRUE(json_get_tag_value(request_json,"status", json_status));
-	ASSERT_STREQ(json_status.c_str(), "ACTIVATED");
-}
-
-
-TEST(its_register_response, add)
-{
-// {
-//   "id":"95837",
-//   "prefixId":"BENCH-ITSPKI-UTOPIA",
-//   "serialId":"mJHu1DatvGI=",
-//   "canonicalName":"BENCH-ITSPKI-UTOPIA.9891EED436ADBC62",
-//   "canonicalId":"QkVOQ0gtSVRTUEtJLVVUT1BJQbcc33yulxJ4",
-//   "technicalPublicKey":"MFkw ... 8w==",
-//   "status":"ACTIVATED",
-//   "profile":"TestDemoProfile",
-//   "tags":[],"ecNumber":0
-// }
-	ItsPkiCmdArguments cmd_args;
-	defaultCmdArgs(cmd_args);
-
-	ItsPkiInternalData idata;
-	
-	ASSERT_TRUE(ParseItsRegisterCmdArguments(cmd_args, idata));
-	ItsPkiSession session(idata);
-	
-	OCTETSTRING response = str2oct(blob_its_register_response);
-	OCTETSTRING ret_its_id;
-        ASSERT_TRUE(session.ItsRegisterResponse_Parse(response, ret_its_id));
-	ASSERT_EQ(ret_its_id, str2oct(its_register_resp_id_hex));
 }
 
 

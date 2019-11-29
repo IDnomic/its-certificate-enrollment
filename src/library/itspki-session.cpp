@@ -471,108 +471,6 @@ ItsPkiSession::IEEE1609dot2_VerifySignedData_H(IEEE1609dot2::SignedData &signed_
 
 
 bool
-ItsPkiSession::ItsRegisterRequest_Create(ItsPkiInternalData &idata, OCTETSTRING &ret)
-{
-        DEBUGC_STREAM_CALLED;
-
-	if (!idata.CheckItsRegisterData())   {
-                ERROR_STREAMC << "invalid Its registration internal data" << std::endl;
-                return false;
-        }
-	
-	void *t_key = idata.GetItsTechnicalKey();
-	if (t_key == NULL)   {
-		DEBUGC_STREAM << "Generate session technical key" << std::endl;
-		if (sessionTechnicalKey == NULL)
-			sessionTechnicalKey = ECKey_GeneratePrivateKey(); 
-		t_key = sessionTechnicalKey;
-	}
-
-	if (t_key == NULL)   {
-                ERROR_STREAMC << "No ITS Technical key" << std::endl;
-                return false;
-	}
-
-        DEBUGC_STREAM << "technical key: " << t_key << std::endl;
-        unsigned char *key_b64 = NULL;
-        size_t key_b64_len = 0;
-
-        if (!ECKey_PublicKeyToMemory(t_key, &key_b64, &key_b64_len))   {
-                ERROR_STREAMC << "cannot write public key to memory" << std::endl;
-                return false;
-        }
-        DEBUGC_STREAM << "technical key: " << t_key << std::endl;
-
-	its_pid = idata.GetItsPrefixId();
-	if (!its_pid.empty())
-		its_cid = OCTETSTRING(its_pid.length(), (const unsigned char *)its_pid.c_str());
-	else
-		its_cid = OCTETSTRING(0, NULL);
-
-	if (idata.IsGenerateItsSerialId())   {
-		OCTETSTRING h;
-		if (!ECKey_PublicKeyHashedID(t_key, h))   {
-			ERROR_STREAMC << "cannot get HashedID from EC public key" << std::endl;
-                        return false;
-                }
-
-                its_sid = OCTETSTRING(8, (const unsigned char *)h);
-                DEBUGC_STREAM << "SID:" <<  its_sid << std::endl;
-	}
-	else   {
-		its_sid = idata.GetItsSerialId();
-	}
-
-	its_cid += its_sid;
-	if (its_cid.lengthof() == 0)   {
-                ERROR_STREAMC << "Cannot compose canonical ID" << std::endl;
-                return false;
-	}
-
-	std::string pid = its_pid;
-	CHARSTRING sid = its_sid.lengthof() > 0 ? encode_base64(its_sid) : "";
-
-	std::string request_str = std::string("{")
-                + "\"prefixId\":\"" + pid + "\","
-                + "\"serialId\":\"" + (const char *)sid + "\","
-                + "\"profile\":\"" + idata.GetProfile() + "\","
-                + "\"technicalPublicKey\":\"" + (char *)key_b64 + "\","
-                + "\"status\":\"ACTIVATED\""
-                + "}";
-        DEBUGC_STREAM << "Its register request: " << request_str << std::endl;
-
-	free(key_b64);
-	key_b64 = NULL;
-
-	ret = OCTETSTRING(request_str.length(), (const unsigned char *)request_str.c_str());
-
-        DEBUGC_STREAM_RETURNS_OK;
-	return true;
-}
-
-
-bool
-ItsPkiSession::ItsRegisterResponse_Parse(OCTETSTRING &response_raw, OCTETSTRING &ret_its_id)
-{
-	DEBUGC_STREAM_CALLED;
-
-	// TODO: parse properly...
-	OCTETSTRING decoded = str2oct(oct2str(response_raw));
-	std::string resp((const char *)((const unsigned char *)decoded), decoded.lengthof());
-
-	if (!json_get_tag_value(resp, "id", its_registered_id))   {
-		ERROR_STREAMC << "Invalid ITS registration response: no 'id' tag" << std::endl;
-		return false;
-	}
-
-	ret_its_id = OCTETSTRING(its_registered_id.length(), (const unsigned char *)its_registered_id.c_str());
-	
-	DEBUGC_STREAM_RETURNS_OK;
-	return true;
-}
-
-
-bool
 ItsPkiSession::EcEnrollmentRequest_InnerEcRequest(ItsPkiInternalData &idata, EtsiTs102941TypesEnrolment::InnerEcRequest &inner_ec_request)
 {
 	DEBUGC_STREAM_CALLED;
@@ -1299,10 +1197,6 @@ ItsPkiSession::sessionCheckAtEnrollmentArguments(ItsPkiInternalData &idata)
 			return false;
 		}
 	}
-
-	std::cout << "### sessionCheckAtEnrollmentArguments() sessionItsAtEncryptionKey " << sessionItsAtEncryptionKey << std::endl;
-	std::cout << "### sessionCheckAtEnrollmentArguments() ItsAtEncryptionKey " << idata.GetItsAtEncryptionKey() << std::endl;
-	std::cout << "### sessionCheckAtEnrollmentArguments() IsItsAtEncryptionKey " << idata.IsItsAtEncryptionKeyEnabled() << std::endl;
 
 	if ((sessionItsAtEncryptionKey == NULL) && (idata.GetItsAtEncryptionKey() == NULL) && idata.IsItsAtEncryptionKeyEnabled())   {
 		sessionItsAtEncryptionKey = ECKey_GeneratePrivateKey();
